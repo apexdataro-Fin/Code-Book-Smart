@@ -1,0 +1,27 @@
+kind = "web"
+previewPath = "/"
+title = "Smart Code — كتاب هندسة البرمجيات"
+version = "1.0.0"
+id = "artifacts/smart-code-book"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 20909
+
+[services.development]
+run = "pnpm --filter @workspace/smart-code-book run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/smart-code-book", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/smart-code-book/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "20909"
+BASE_PATH = "/"
