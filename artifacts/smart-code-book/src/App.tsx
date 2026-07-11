@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { Route, Switch, Router as WouterRouter } from 'wouter';
+import { useHashLocation } from 'wouter/use-hash-location';
 import Cover from '@/pages/Cover';
 import Intro from '@/pages/Intro';
 import TableOfContents from '@/pages/TableOfContents';
@@ -32,7 +33,13 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
+        {/* Hash-based routing so GitHub Pages deep links resolve
+            without depending on a 404.html fallback (which GitHub
+            Pages does NOT reliably serve for project-page URLs). ALL
+            internal wouter <Link href="..."> props auto-prefix with
+            "#" so URLs become "#/intro", "#/toc", etc. The Cover
+            (root) renders when the URL fragment is empty. */}
+        <WouterRouter hook={useHashLocation}>
           <Router />
         </WouterRouter>
         <Toaster />
