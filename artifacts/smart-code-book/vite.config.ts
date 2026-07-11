@@ -60,6 +60,18 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, 'dist/public'),
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        // Split Monaco and the Lab UI into their own chunk so the
+        // homepage bundle stays small (Monaco is ~1 MB minified).
+        manualChunks(id) {
+          if (id.includes('node_modules/monaco-editor')) return 'monaco';
+          if (id.includes('node_modules/@monaco-editor/react')) return 'monaco';
+          if (id.includes('/lib/lab/') || id.includes('/components/lab/') || id.includes('/pages/Lab')) return 'lab';
+          return undefined as any;
+        },
+      },
+    },
   },
   server: {
     port,

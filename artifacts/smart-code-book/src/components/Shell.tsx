@@ -14,6 +14,8 @@ import {
   Download,
   BookText,
   RotateCcw,
+  Beaker,
+  Sparkles,
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
@@ -187,6 +189,20 @@ export function Sidebar({ open, setOpen }: { open: boolean; setOpen: (v: boolean
           ))}
 
           <div className="space-y-1 border-t border-border pt-4">
+            <NavItem
+              href="/lab"
+              icon={Beaker}
+              label="مختبر Smart Code"
+              isActive={location.startsWith('/lab')}
+              onClick={closeIfMobile}
+            />
+            <NavItem
+              href="/lab/guided"
+              icon={Sparkles}
+              label="تمارين موجَّهة"
+              isActive={location === '/lab/guided'}
+              onClick={closeIfMobile}
+            />
             <NavItem
               href="/prompts"
               icon={TerminalSquare}

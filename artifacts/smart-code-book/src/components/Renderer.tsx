@@ -1,10 +1,13 @@
 import React, { useState } from 'react';
+import { Link } from 'wouter';
 import { ContentNode } from '@/data/types';
 import { CodeBlock } from './ui/CodeBlock';
 import { Callout } from './ui/Callout';
-import { ChevronDown, ChevronUp } from 'lucide-react';
+import { ChevronDown, ChevronUp, Beaker } from 'lucide-react';
 import { UnitQuiz } from './UnitQuiz';
 import { renderSegments, shouldBidiWrapParagraph, wrapLatinTokens } from '@/lib/bidi';
+import { pushLessonHandoff } from '@/lib/lab/lessonBridge';
+import { mapCodeLanguageToLab } from '@/lib/lab/languages';
 
 export function ContentRenderer({ nodes }: { nodes: ContentNode[] }) {
   return (
@@ -33,7 +36,18 @@ function NodeRenderer({ node }: { node: ContentNode }) {
         </div>
       );
     case 'code':
-      return <CodeBlock language={node.language} content={node.content} title={node.title} />;
+      return (
+        <div className="my-6">
+          <CodeBlock language={node.language} content={node.content} title={node.title} />
+          <OpenInLabButton
+            stageId={(node as any).__stageId ?? null}
+            unitId={(node as any).__unitId ?? null}
+            language={node.language}
+            title={node.title ?? node.language}
+            content={node.content}
+          />
+        </div>
+      );
     case 'callout':
       return (
         <Callout type={node.calloutType} title={node.title}>
@@ -191,4 +205,54 @@ function hashId(s: string): string {
   let h = 5381;
   for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0;
   return h.toString(36);
+}
+
+/**
+ * "افتح في مختبر Smart Code" button rendered beneath each CodeBlock.
+ * Writes a one-shot handoff to localStorage and navigates to the
+ * lesson-mode page so the lab appears beside the lesson the learner
+ * was just reading (or, if invoked outside a unit, to /lab directly).
+ *
+ * The button is intentionally RTL-friendly and uses icon + short
+ * Arabic label so it does not visually compete with the code block.
+ */
+function OpenInLabButton({
+  stageId,
+  unitId,
+  language,
+  title,
+  content,
+}: {
+  stageId: string | null;
+  unitId: string | null;
+  language: string;
+  title: string;
+  content: string;
+}) {
+  const handleClick = () => {
+    try {
+      pushLessonHandoff({
+        stageId: stageId ?? '__external__',
+        unitId: unitId ?? '__external__',
+        language: mapCodeLanguageToLab(language),
+        title: title || language,
+        content: content || '',
+      });
+    } catch {
+      /* ignore */
+    }
+  };
+  const target = stageId && unitId
+    ? `/lab/lesson/${stageId}/${unitId}`
+    : '/lab';
+  return (
+    <div className="-mt-4 mb-6">
+      <Link href={target} onClick={handleClick}>
+        <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md border border-primary/40 bg-primary/5 text-primary hover:bg-primary/10 text-sm font-bold cursor-pointer">
+          <Beaker className="w-4 h-4" />
+          <span>افتح في مختبر Smart Code</span>
+        </span>
+      </Link>
+    </div>
+  );
 }
