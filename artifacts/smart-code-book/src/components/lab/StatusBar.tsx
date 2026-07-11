@@ -1,21 +1,25 @@
 import { useEffect, useState } from 'react';
-import { Cloud, Loader2, Activity } from 'lucide-react';
-import type { LabProject } from '@/lib/lab/types';
+import { Cloud, Loader2, Activity, AlertCircle, Cpu } from 'lucide-react';
+import type { LabProject, LanguageAdapter } from '@/lib/lab/types';
 import { LAB_SAVED_EVENT } from '@/lib/lab/storage';
+import type { PyodideState } from '@/lib/lab/pyodideLoader';
 
 interface StatusBarProps {
   project: LabProject;
   isRunning: boolean;
-  isPyReady: boolean;
+  pyState: PyodideState;
+  adapter: LanguageAdapter;
 }
 
 /**
- * Bottom status bar. Shows project name, active file, language,
- * autosave tick (re-renders whenever the storage layer broadcasts
- * `sc:lab-saved`), run state, and Python runtime readiness.
+ * Bottom status bar — v2.
+ *
+ * Everything here is adapter-driven: the runtime badge reads
+ * `adapter.meta.runtime`, the language pill reads `adapter.meta`.
+ * Python-specific items (loader % ready / error / spinner) only render
+ * when the active language is Python.
  */
-export function StatusBar({ project, isRunning, isPyReady }: StatusBarProps) {
-  const active = project.files.find((f) => f.id === project.activeId) ?? project.files[0];
+export function StatusBar({ project, isRunning, pyState, adapter }: StatusBarProps) {
   const [savedTick, setSavedTick] = useState(0);
 
   useEffect(() => {
@@ -27,6 +31,9 @@ export function StatusBar({ project, isRunning, isPyReady }: StatusBarProps) {
     return () => window.removeEventListener(LAB_SAVED_EVENT, onSaved);
   }, [project.id]);
 
+  const active = project.files.find((f) => f.id === project.activeId) ?? project.files[0];
+  const activeAdapter = active ? adapter : adapter;
+
   return (
     <div className="flex items-center justify-between gap-2 px-3 py-1.5 border-t border-border bg-card text-[11px] text-muted-foreground">
       <div className="flex items-center gap-3 min-w-0 overflow-hidden">
@@ -35,6 +42,8 @@ export function StatusBar({ project, isRunning, isPyReady }: StatusBarProps) {
         <span dir="ltr" className="font-mono truncate">{active?.name ?? '—'}</span>
         <span className="text-border">|</span>
         <span className="uppercase tracking-wider">{active?.language ?? '—'}</span>
+        <span className="hidden md:inline text-border">|</span>
+        <span className="hidden md:inline truncate max-w-[260px]">{activeAdapter.meta.description}</span>
       </div>
       <div className="flex items-center gap-3 shrink-0">
         <span
@@ -44,20 +53,68 @@ export function StatusBar({ project, isRunning, isPyReady }: StatusBarProps) {
         >
           <Cloud className="w-3 h-3" /> محفوظ تلقائيًا
         </span>
-        {project.language === 'python' && (
-          <span
-            dir="ltr"
-            className={`flex items-center gap-1 ${isPyReady ? 'text-emerald-600' : 'text-amber-500'}`}
-            title={isPyReady ? 'Python جاهز' : 'Python لم يُحمَّل بعد'}
-          >
-            {isPyReady ? <Activity className="w-3 h-3" /> : <Loader2 className="w-3 h-3 animate-spin" />}
-            {isPyReady ? 'Python' : 'Python…'}
+
+        {/* Runtime badge — driven by adapter.meta.runtime. */}
+        {activeAdapter.meta.runtime === 'wasm-python' && (
+          <PythonRuntimeBadge pyState={pyState} />
+        )}
+        {activeAdapter.meta.runtime && activeAdapter.meta.runtime !== 'wasm-python' && (
+          <span dir="ltr" className="flex items-center gap-1 text-sky-600" title={activeAdapter.meta.runtime}>
+            <Cpu className="w-3 h-3" />
+            {activeAdapter.meta.executable ? 'runtime: ' + activeAdapter.meta.runtime : 'static'}
           </span>
         )}
+
         <span className={isRunning ? 'text-primary' : ''}>
           {isRunning ? 'قيد التشغيل…' : 'جاهز'}
         </span>
       </div>
     </div>
+  );
+}
+
+function PythonRuntimeBadge({ pyState }: { pyState: PyodideState }) {
+  if (pyState.status === 'ready') {
+    return (
+      <span
+        dir="ltr"
+        className="flex items-center gap-1 text-emerald-600"
+        title="Python جاهز"
+      >
+        <Activity className="w-3 h-3" /> Python
+      </span>
+    );
+  }
+  if (pyState.status === 'error') {
+    return (
+      <span
+        dir="ltr"
+        className="flex items-center gap-1 text-rose-500"
+        title={pyState.message || 'فشل تحميل Python'}
+      >
+        <AlertCircle className="w-3 h-3" /> Python: خطأ
+      </span>
+    );
+  }
+  if (pyState.status === 'loading') {
+    const pct = Math.round((pyState.progress || 0) * 100);
+    return (
+      <span
+        dir="ltr"
+        className="flex items-center gap-1 text-amber-500"
+        title={pyState.message}
+      >
+        <Loader2 className="w-3 h-3 animate-spin" /> Python {pct}%
+      </span>
+    );
+  }
+  return (
+    <span
+      dir="ltr"
+      className="flex items-center gap-1 text-muted-foreground"
+      title="Python لم يبدأ التحميل بعد"
+    >
+      Python…
+    </span>
   );
 }

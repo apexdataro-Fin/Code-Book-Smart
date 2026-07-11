@@ -7,11 +7,17 @@ import {
   setActiveProjectId,
   listProjectIds,
 } from './storage';
+import { getAdapter } from './registry';
+import { detectLanguageFromFilename } from './languages';
 
 /**
  * Project manager — pure functional helpers over `LabProject` plus the
  * storage layer. Stateless: every call returns a fresh value or directly
  * persists via `saveProject` / `_deleteProject`.
+ *
+ * No hardcoded filename ternary chains — all language-specific defaults
+ * flow through the registry's LanguageAdapter so adding Java / SQL / C++
+ * only requires a new adapter entry in registry.ts.
  */
 
 function uid(prefix = 'p'): string {
@@ -40,29 +46,17 @@ export function createProject(opts: {
   files?: LabFile[];
   starterCode?: string;
 }): LabProject {
-  const mainName = opts.language === 'python'
-    ? 'main.py'
-    : opts.language === 'typescript'
-      ? 'main.ts'
-      : opts.language === 'javascript'
-        ? 'main.js'
-        : opts.language === 'html'
-          ? 'index.html'
-          : opts.language === 'css'
-            ? 'style.css'
-            : opts.language === 'json'
-              ? 'data.json'
-              : opts.language === 'markdown'
-                ? 'README.md'
-                : 'main.sh';
+  const adapter = getAdapter(opts.language);
+  const defaultFileName = adapter.meta.defaultFile;
+  const defaultContent = opts.starterCode ?? adapter.meta.defaultCode;
+
   const mainFile: LabFile = {
-    id: filenameToId(mainName),
-    name: mainName,
+    id: filenameToId(defaultFileName),
+    name: defaultFileName,
     language: opts.language,
     content:
-      opts.files?.find((f) => f.id === filenameToId(mainName))?.content ??
-      opts.starterCode ??
-      defaultCodeFor(opts.language),
+      opts.files?.find((f) => filenameToId(f.name) === filenameToId(defaultFileName))?.content ??
+      defaultContent,
   };
   const files = opts.files && opts.files.length > 0
     ? ensureUniqueIds(opts.files)
@@ -84,6 +78,49 @@ export function createProject(opts: {
   saveProject(project);
   setActiveProjectId(project.id);
   return project;
+}
+
+/**
+ * Create a fresh project for a language switch — replaces the active
+ * file with the new language's defaults. Used by LanguageSelector.
+ * Keeps the original project id, name, mode, settings, and other files.
+ */
+export function switchActiveFileLanguage(
+  project: LabProject,
+  newLanguage: LanguageId,
+): LabProject {
+  const adapter = getAdapter(newLanguage);
+  const active = project.files.find((f) => f.id === project.activeId) ?? project.files[0];
+  if (!active) {
+    // Empty project — seed with a default file.
+    const seedName = adapter.meta.defaultFile;
+    const seedFile: LabFile = {
+      id: filenameToId(seedName),
+      name: seedName,
+      language: newLanguage,
+      content: adapter.meta.defaultCode,
+    };
+    return updateProject(project, {
+      language: newLanguage,
+      files: [seedFile],
+      activeId: seedFile.id,
+    });
+  }
+  const files: LabFile[] = project.files.map((f) =>
+    f.id === active.id
+      ? {
+          ...f,
+          name: adapter.meta.defaultFile,
+          language: newLanguage,
+          content: adapter.meta.defaultCode,
+        }
+      : f,
+  );
+  return updateProject(project, {
+    language: newLanguage,
+    files,
+    activeId: active.id,
+  });
 }
 
 /** Load a project by id. */
@@ -137,11 +174,12 @@ export function deleteProject(id: string): void {
 /* ---------- file helpers ---------- */
 
 export function addFile(project: LabProject, partial: Partial<LabFile> & { name: string }): LabProject {
+  const lang = (partial.language ?? detectLanguageFromFilename(partial.name) ?? project.language) as LanguageId;
   const file: LabFile = {
     id: filenameToId(partial.id ?? partial.name),
     name: partial.name,
-    language: (partial.language ?? project.language) as LanguageId,
-    content: partial.content ?? '',
+    language: lang,
+    content: partial.content ?? getAdapter(lang).meta.defaultCode,
     readOnly: !!partial.readOnly,
   };
   // Avoid duplicate ids; bump with -2 -3 etc.
@@ -159,12 +197,14 @@ export function addFile(project: LabProject, partial: Partial<LabFile> & { name:
 
 export function renameFile(project: LabProject, fileId: string, newName: string): LabProject {
   const saneName = newName.trim().slice(0, 80) || 'file';
+  const inferred = detectLanguageFromFilename(saneName);
   const files = project.files.map((f) =>
     f.id === fileId
       ? {
           ...f,
           name: saneName,
           id: filenameToId(saneName),
+          language: inferred ?? f.language,
         }
       : f,
   );
@@ -202,38 +242,6 @@ function defaultSettings(_language: LanguageId): LabProject['settings'] {
     tabSize: 2,
     minimap: false,
   };
-}
-
-function defaultCodeFor(language: LanguageId): string {
-  switch (language) {
-    case 'javascript':
-      return "//js\nconsole.log('مرحبا بالعالم');\n";
-    case 'typescript': {
-      const greet = (name: string): string => 'مرحبا ' + name;
-      console.log(greet('العالم'));
-      return [
-        '//ts',
-        'const greet = (name: string): string =>',
-        '  "مرحبا " + name;',
-        "console.log(greet('العالم'));",
-        '',
-      ].join('\n');
-    }
-    case 'python':
-      return 'name = "العالم"\nprint("مرحبا " + name + "!")\n';
-    case 'html':
-      return '<!doctype html>\n<html lang="ar" dir="rtl">\n<head><meta charset="utf-8"><title>تجربة</title></head>\n<body>\n  <h1>مرحبا بالعالم</h1>\n  <p>عدّل هذا الكود واضغط تشغيل.</p>\n</body>\n</html>\n';
-    case 'css':
-      return 'body { font-family: system-ui; padding: 2rem; }\nh1 { color: #0ea5e9; }\n';
-    case 'json':
-      return '{\n  "name": "smart-code-lab",\n  "version": 1\n}\n';
-    case 'markdown':
-      return '# مذكرة\n\n- نقطة ١\n- نقطة ٢\n';
-    case 'shell':
-      return '#!/usr/bin/env bash\necho "مرحبا"\n';
-    default:
-      return '';
-  }
 }
 
 function ensureUniqueIds(files: LabFile[]): LabFile[] {

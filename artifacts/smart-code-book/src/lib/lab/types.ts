@@ -8,12 +8,52 @@
 export type LanguageId =
   | 'javascript'
   | 'typescript'
+  | 'python'
   | 'html'
   | 'css'
   | 'json'
   | 'markdown'
-  | 'shell'
-  | 'python';
+  | 'shell';
+
+/** Coarse category used by the UI to group language chips. */
+export type LanguageCategory =
+  | 'script'      // JS, TS, Python, Shell
+  | 'markup'      // HTML
+  | 'style'       // CSS
+  | 'data'        // JSON
+  | 'docs';       // Markdown
+
+/**
+ * Static, language-level metadata. EVERY UI surface reads from this map;
+ * there is no hardcoded language logic in components. Adding Java, SQL,
+ * C++, Rust, Go, or PHP = one new entry here + one adapter in registry.
+ */
+export interface LanguageMeta {
+  id: LanguageId;
+  displayName: string;
+  /** Native name shown on RTL surfaces (Arabic display for some langs). */
+  displayNameAr: string;
+  /** Monaco language id consumed by @monaco-editor/react. */
+  monacoLang: string;
+  /** Default filename when a fresh project is created (e.g. "main.py"). */
+  defaultFile: string;
+  /** Default starter content shown when the project is empty / reset. */
+  defaultCode: string;
+  /** True if the Lab has a real in-browser runtime for this language. */
+  executable: boolean;
+  /** True if the runtime loads dynamically (Pyodide). UI can preload. */
+  dynamicRuntime?: boolean;
+  /** File extensions without the dot, lower-cased. */
+  extensions: string[];
+  /** Coarse category used for chip styling and groupings. */
+  category: LanguageCategory;
+  /** Optional subclass for runtime-specific UI (e.g. Pyodide). */
+  runtime?: 'wasm-python' | 'iframe-sandbox' | 'iframe-html' | 'parse-only';
+  /** Short icon character (emoji-free preferred but allowed for visual cues). */
+  glyph: string;
+  /** Single-line description shown on hover / language selector. */
+  description: string;
+}
 
 export interface LabFile {
   /** Stable id within a project (filename-derived, no spaces). */
@@ -86,22 +126,24 @@ export interface RunResult {
   durationMs: number;
 }
 
-/** Adapter contract — every language conforms to this. */
+/**
+ * Adapter contract — every language conforms to this. The Lab UI never
+ * branches on `language === '...'`; it always goes through the adapter.
+ * To add a new language: write one adapter, register it in
+ * `registry.ts`, and the LanguageSelector will pick it up.
+ */
 export interface LanguageAdapter {
-  id: LanguageId;
-  displayName: string;
-  /** Monaco language id used by @monaco-editor/react. */
-  monacoLang: string;
-  /** Default filename when the project has no files. */
-  defaultFile: string;
-  /** Default starter content shown when a fresh file is added. */
-  defaultCode: string;
-  /** True if this language has a real in-browser runtime. */
-  executable: boolean;
+  /** Static metadata describing the language. */
+  meta: LanguageMeta;
   /** Optional pretty formatter. Returns code unchanged when unsupported. */
   format?(code: string): Promise<string>;
   /** Run the active file (or the whole project) within an AbortSignal scope. */
   run(opts: RunOpts): Promise<RunResult>;
+  /**
+   * Assemble a preview HTML for the active file (used by PreviewPanel).
+   * Returning `null` means: no preview available for this language.
+   */
+  preview(opts: PreviewOpts): string | null;
 }
 
 export interface RunOpts {
@@ -112,6 +154,13 @@ export interface RunOpts {
   /** Fires when a structured error is captured. */
   onError: (e: RunError) => void;
   signal: AbortSignal;
+}
+
+export interface PreviewOpts {
+  project: LabProject;
+  activeFile: LabFile;
+  /** All project files (for multi-file previews). */
+  files: LabFile[];
 }
 
 export interface StarterProject {
