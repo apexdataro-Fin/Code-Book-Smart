@@ -31,7 +31,15 @@ export function CodeBlock({ language, content, title }: CodeBlockProps) {
   };
 
   return (
-    <div className="my-6 rounded-lg overflow-hidden border border-border bg-[#1d1f21] no-print-bg shadow-sm" dir="ltr">
+    // P0 fix: `unicode-bidi: isolate` on the OUTER wrapper means an
+    // embedded bidi run inside the code block cannot leak into the RTL
+    // page direction and accidentally reverse Latin identifiers. We keep
+    // `dir="ltr"` so Prism's token spans lay out left-to-right as designed.
+    <div
+      className="my-6 rounded-lg overflow-hidden border border-border bg-[#1d1f21] no-print-bg shadow-sm"
+      dir="ltr"
+      style={{ unicodeBidi: 'isolate' }}
+    >
       {(title || language) && (
         <div className="flex items-center justify-between px-4 py-2 bg-black/40 border-b border-white/10 text-white/80 text-xs font-mono">
           <span>{title || language}</span>
@@ -44,7 +52,13 @@ export function CodeBlock({ language, content, title }: CodeBlockProps) {
           </button>
         </div>
       )}
-      <div className="p-4 overflow-x-auto text-sm font-mono text-left">
+      {/* P2 fix: iPhone-sized screens need touch-friendly horizontal scroll
+          and a visible scrollbar cue. `-webkit-overflow-scrolling: touch`
+          gives momentum on iOS, thin scrollbar keeps it unobtrusive. */}
+      <div
+        className="p-4 overflow-x-auto text-sm font-mono text-left"
+        style={{ WebkitOverflowScrolling: 'touch', scrollbarWidth: 'thin' }}
+      >
         <pre className={`language-${language} !m-0 !p-0 !bg-transparent`}>
           <code className={`language-${language}`}>{content}</code>
         </pre>

@@ -197,6 +197,11 @@ function contentNodesToParagraphs(nodes: ContentNode[]): (Paragraph | Table)[] {
         result.push(new Table({
           rows: tableRows,
           width: { size: 100, type: WidthType.PERCENTAGE },
+          // P0 fix: mark whole table as visually RTL so columns lay out
+          // right-to-left in Word, matching the right-aligned paragraph
+          // children. Cell paragraphs alone are not enough on DOCX column
+          // layout — without this, the export renders columns LTR.
+          visuallyRightToLeft: true,
         }));
         result.push(new Paragraph({ children: [new TextRun({ text: '' })], spacing: { after: 160 } }));
         break;
@@ -331,7 +336,7 @@ export async function downloadDocx(): Promise<void> {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = 'Smart-Code-Backend-Engineering-2026.docx';
+  a.download = 'Smart-Code-Book-2026.docx';
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);

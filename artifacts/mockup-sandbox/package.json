@@ -3,6 +3,8 @@
   "version": "2.0.0",
   "type": "module",
   "private": true,
+  "description": "DEPRECATED Replit canvas prototype. See artifacts/mockup-sandbox/DEPRECATED.md. Not used by the Smart Code book; kept for historical reference only.",
+  "deprecated": true,
   "scripts": {
     "dev": "vite dev",
     "build": "vite build",

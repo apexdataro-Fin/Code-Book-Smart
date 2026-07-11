@@ -238,7 +238,7 @@
   }
 }
 
-/* ─── PROSE OVERRIDES ────────────────────────────────────── */
+/* ─── PROSE OVERRIDES ─────────────────────────────────── */
 .prose {
   --tw-prose-body: hsl(var(--foreground) / 0.85);
   --tw-prose-headings: hsl(var(--primary));
@@ -253,6 +253,19 @@
   text-align: left;
   border-radius: 0.5rem;
   overflow-x: auto;
+}
+
+/* P1 fix: isolate bidi per paragraph/list-item so a Latin technical
+   term (e.g. "Big O", "O(n)") embedded in a long Arabic paragraph
+   cannot flip surrounding digits or reorder mixed Arabic+Latin runs.
+   `unicode-bidi: isolate` creates a fresh bidi embedding at this
+   boundary, neutralizing the page-level RTL context. */
+.prose p,
+.prose li,
+.prose h1, .prose h2, .prose h3, .prose h4, .prose h5, .prose h6,
+.prose blockquote,
+.prose td, .prose th {
+  unicode-bidi: isolate;
 }
 
 /* ─── UTILITY: ELEVATION ─────────────────────────────────── */

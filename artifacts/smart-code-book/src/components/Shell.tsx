@@ -51,8 +51,8 @@ export function Sidebar({ open, setOpen }: { open: boolean; setOpen: (v: boolean
         />
       )}
 
-      {/* Sidebar */}
-      <aside className={`fixed top-0 bottom-0 right-0 z-50 w-72 bg-card border-l border-border flex flex-col transition-transform duration-300 lg:translate-x-0 ${
+      {/* Sidebar — desktop slides off-screen when closed, mobile slides on */}
+      <aside className={`fixed top-0 bottom-0 right-0 z-50 w-72 bg-card border-l border-border flex flex-col transition-transform duration-300 ${
         open ? "translate-x-0" : "translate-x-full"
       }`}>
 
@@ -63,7 +63,7 @@ export function Sidebar({ open, setOpen }: { open: boolean; setOpen: (v: boolean
               Smart Code
             </span>
           </Link>
-          <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setOpen(false)}>
+          <Button variant="ghost" size="icon" onClick={() => setOpen(false)} title="إغلاق القائمة">
             <X className="w-5 h-5" />
           </Button>
         </div>
@@ -129,7 +129,17 @@ export function Sidebar({ open, setOpen }: { open: boolean; setOpen: (v: boolean
 }
 
 export function Shell({ children }: { children: React.ReactNode }) {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  // P1 fix: sidebar is now toggleable on BOTH mobile and desktop,
+  // persisted in localStorage. Desktop users regain ~290px of reading
+  // width when they collapse the sidebar via the header button.
+  const [sidebarOpen, setSidebarOpen] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    const saved = localStorage.getItem('sc_sidebar_open');
+    if (saved !== null) return saved === 'true';
+    // On small screens default to closed (drawer pattern); on desktop
+    // default to open so the existing layout is preserved.
+    return window.innerWidth >= 1024;
+  });
   const [isDark, setIsDark] = useState(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('sc_theme');
@@ -151,6 +161,14 @@ export function Shell({ children }: { children: React.ReactNode }) {
     }
   }, [isDark]);
 
+  useEffect(() => {
+    try {
+      localStorage.setItem('sc_sidebar_open', String(sidebarOpen));
+    } catch (e) {
+      /* localStorage unavailable — ignore */
+    }
+  }, [sidebarOpen]);
+
   const handleDownload = async () => {
     setIsDownloading(true);
     try {
@@ -166,10 +184,20 @@ export function Shell({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen bg-background text-foreground flex">
       <Sidebar open={sidebarOpen} setOpen={setSidebarOpen} />
 
-      <div className="flex-1 flex flex-col min-w-0 transition-all duration-300 lg:pr-72">
+      {/* P1 fix: sidebar right-padding tracks `sidebarOpen` on desktop too.
+          Fully closed on desktop collapses to 0 padding for maximum reading
+          width. On mobile the sidebar slides over content, so no padding. */}
+      <div className={`flex-1 flex flex-col min-w-0 transition-all duration-300 ${
+        sidebarOpen ? 'lg:pr-72' : 'lg:pr-0'
+      }`}>
         <header className="h-14 border-b border-border bg-card/80 backdrop-blur sticky top-0 z-30 flex items-center justify-between px-4 no-print">
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setSidebarOpen(true)}>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setSidebarOpen(v => !v)}
+              title={sidebarOpen ? 'إغلاق القائمة' : 'فتح القائمة'}
+            >
               <Menu className="w-5 h-5" />
             </Button>
           </div>
