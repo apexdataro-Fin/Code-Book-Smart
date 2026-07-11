@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
+import { isTouchPrimaryDevice } from '@/lib/lab/mobileDetect';
 
 /**
  * Lazy-loaded Monaco editor. The actual `@monaco-editor/react` library is
@@ -13,6 +14,15 @@ import { lazy, Suspense, useEffect, useState } from 'react';
  *   - The editor is wrapped in a div with explicit `dir="ltr"` and
  *     `unicode-bidi: isolate` so embedded Latin tokens don't get
  *     reordered by the RTL page.
+ *
+ * Touch mode (v4):
+ *   - Detect touch-only devices via `(pointer: coarse) and (hover: none)`.
+ *   - On touch devices, disable Monaco's desktop context menu (Command
+ *     Palette / Change All Occurrences / etc.) so the native iOS/Android
+ *     long-press selection handles work.
+ *   - Same flip also disables hover-docs, occurrences highlight, line-
+ *     number-tap selection, and middle-click paste — all desktop-only.
+ *   - Desktop is unchanged.
  *
  * Theme:
  *   - Toggles `vs-dark` vs `vs` based on the document's `.dark` class so
@@ -101,6 +111,31 @@ export function MonacoEditor(props: MonacoEditorProps) {
             try {
               editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {});
             } catch { /* ignore */ }
+
+            // Mobile UX flip — only on touch-only devices.
+            // (pointer: coarse) is true on phones/tablets; (hover: none)
+            // is true when no mouse pointer is attached. Both required
+            // so iPad-with-Magic-Keyboard keeps the desktop feature set.
+            if (isTouchPrimaryDevice()) {
+              try {
+                editor.updateOptions({
+                  // Kill Monaco's desktop context menu so the native OS
+                  // long-press selection handles (Copy / Cut / Paste)
+                  // appear instead.
+                  contextmenu: false,
+                  // Touch has no hover; lingering tooltip chrome is noise.
+                  hover: { enabled: false },
+                  // Stops "Change All Occurrences" word-highlight that
+                  // visually clutters touch selection.
+                  occurrencesHighlight: 'off',
+                  // Tap on line number → don't accidentally select whole line.
+                  selectOnLineNumbers: false,
+                  // Disable the desktop middle-click paste clipboard.
+                  selectionClipboard: false,
+                });
+              } catch { /* noop */ }
+            }
+
             props.onMount?.(editor, monaco);
           }}
           loading={<EditorSkeleton />}

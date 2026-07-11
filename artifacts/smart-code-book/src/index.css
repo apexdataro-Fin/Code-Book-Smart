@@ -786,6 +786,45 @@ html, body, .mobile-lab-ide {
   background: hsl(var(--background));
 }
 
+/* ----------------------------------------------------------------------------
+ * Mobile Monaco UX — native OS text-selection handles
+ * ----------------------------------------------------------------------------
+ * On iPhone Safari / Android Chrome, monaco-editor sets aggressive
+ * user-select on some internal layers. We override:
+ *   1. -webkit-touch-callout → default (allow iOS Copy bubble)
+ *   2. tap-highlight → transparent (no gray tap flash)
+ *   3. user-select → auto on Monaco's contenteditable descendants
+ * Works for both the mobile wrapper (.mobile-editor-host) and the
+ * generic mount point (.lab-monaco-host) used in DesktopLabShell.
+ * -------------------------------------------------------------------------- */
+
+.lab-monaco-host,
+.mobile-editor-host {
+  -webkit-touch-callout: default;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.lab-monaco-host .monaco-editor,
+.lab-monaco-host .monaco-editor .view-lines,
+.lab-monaco-host .monaco-editor .view-line,
+.mobile-editor-host .monaco-editor,
+.mobile-editor-host .monaco-editor .view-lines,
+.mobile-editor-host .monaco-editor .view-line {
+  user-select: auto !important;
+  -webkit-user-select: auto !important;
+}
+
+/* Allow iOS to draw its own selection caret without Monaco's caret overlay
+   fighting it on touch. We only relax this on actual touch devices via a
+   body-level data attribute that MobileLabRoot sets. */
+html[data-touch='true'] .lab-monaco-host .cursor,
+html[data-touch='true'] .mobile-editor-host .cursor {
+  /* Leave cursor rendering alone — Monaco's "smooth" caret looks fine
+     together with native iOS handles. This rule is here as a hook for
+     any future overlay suppression if caret fights selection. */
+}
+
 /* ---------- Bottom sheet ---------- */
 
 .mobile-sheet-root {

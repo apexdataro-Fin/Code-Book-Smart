@@ -76,6 +76,52 @@ export function useIsLandscape(): boolean {
 }
 
 /* =============================================================================
+ * Touch device detection (Monaco v4 mobile UX)
+ *
+ * `useIsMobile()` is WIDTH-based — it captures layout decisions. But the
+ * Monaco touch-mode flip depends on the *input device*, not on the screen
+ * size. A Surface Pro with no Type Cover may have pointer: coarse even when
+ * the layout is wide; an iPad with Magic Keyboard has pointer: fine.
+ *
+ * Helper: `isTouchPrimaryDevice()` returns true only when the device is
+ * touch-only — `(pointer: coarse)` AND `(hover: none)`. This excludes
+ * tablets with mouse pointers and desktop touchscreens with attached
+ * peripherals.
+ *
+ * `useTouchMode()` runs the same check as a React state so consumers can
+ * branch (the MonacoEditor path only needs sync detection in onMount, so
+ * the synchronous helper is the primary API; the hook is provided for
+ * components that want to re-render on orientation/peripheral changes).
+ * =========================================================================== */
+
+export function isTouchPrimaryDevice(): boolean {
+  if (typeof window === 'undefined' || !window.matchMedia) return false;
+  // Both conditions must be true: a fine pointer (mouse) overrides touch.
+  return (
+    window.matchMedia('(pointer: coarse)').matches &&
+    window.matchMedia('(hover: none)').matches
+  );
+}
+
+export function useTouchMode(): boolean {
+  const [touch, setTouch] = useState<boolean>(() => isTouchPrimaryDevice());
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return;
+    const q1 = window.matchMedia('(pointer: coarse)');
+    const q2 = window.matchMedia('(hover: none)');
+    const update = () => setTouch(isTouchPrimaryDevice());
+    if ('addEventListener' in q1) q1.addEventListener('change', update);
+    if ('addEventListener' in q2) q2.addEventListener('change', update);
+    update();
+    return () => {
+      if ('removeEventListener' in q1) q1.removeEventListener('change', update);
+      if ('removeEventListener' in q2) q2.removeEventListener('change', update);
+    };
+  }, []);
+  return touch;
+}
+
+/* =============================================================================
  * Visual Viewport helpers (Mobile v4)
  *
  * Two CSS custom properties are set on <html>:
