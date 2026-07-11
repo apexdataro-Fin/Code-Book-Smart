@@ -595,7 +595,7 @@ pre, code, .font-mono {
 }
 
 /* ============================================================================
- * MOBILE LAB v3 — phone-first UX
+ * MOBILE LAB v4 — phone-first IDE
  * ============================================================================ */
 
 :root {
@@ -603,32 +603,38 @@ pre, code, .font-mono {
   --safe-top: env(safe-area-inset-top, 0px);
 }
 
-/* ---------- Root + layout shell ---------- */
+/* ---------- Root + vertical layout (grid) ---------- */
 
-.mobile-lab-root {
-  display: flex;
-  flex-direction: column;
-  height: 100dvh; /* dynamic viewport (Safari/Chrome handle bars) */
+.mobile-lab-ide {
+  height: var(--vvh, 100dvh);
   width: 100%;
   background: hsl(var(--background));
   color: hsl(var(--foreground));
+  display: grid;
+  /* 36px header → vr-h viewer → 18px divider → editor fills remaining → bottom 60px reserved for absolute runbar */
+  grid-template-rows: 36px var(--vr-h, 260px) 18px 1fr;
+  padding-bottom: var(--runbar-h, 60px);
   overflow: hidden;
   position: relative;
+  overscroll-behavior: none;
+  touch-action: manipulation;
+}
+
+/* Mobile viewport overflow safety: explicitly block horizontal page scroll. */
+html, body, .mobile-lab-ide {
+  overflow-x: hidden !important;
 }
 
 .mobile-lab-header {
-  flex: none;
-  padding: calc(var(--safe-top) + 8px) 8px 8px;
+  height: 36px;
+  padding: 0 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   border-bottom: 1px solid hsl(var(--border));
   background: hsl(var(--card));
   z-index: 2;
-}
-
-.mobile-lab-title-row {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  flex-wrap: nowrap;
+  min-width: 0;
 }
 
 .mobile-lab-filename {
@@ -648,74 +654,90 @@ pre, code, .font-mono {
   text-align: left;
 }
 
-.mobile-lab-main {
-  flex: 1 1 auto;
+/* Viewer (top) and Editor (bottom) — sizing is via grid + CSS vars. */
+.mobile-lab-viewer {
   min-height: 0;
-  position: relative;
   overflow: hidden;
+  background: hsl(var(--background));
+  border-bottom: 1px solid hsl(var(--border));
 }
 
-.mobile-lab-tab-body {
-  height: 100%;
+.mobile-lab-editor {
+  min-height: 0;
+  overflow: hidden;
+  background: hsl(var(--background));
   position: relative;
 }
 
-/* On mobile, hide the desktop split chrome entirely so there is no leftover. */
-.lab-shell-mobile > div[role='dialog'],
-.lab-shell-mobile .lab-shell { display: none; }
+/* When the keyboard is open, force a minimum for the editor so at
+   least 3 lines + Run button stay visible. */
+.mobile-lab-keyboard-open .mobile-lab-editor {
+  min-height: 110px;
+}
 
-/* ---------- Bottom content tab bar ---------- */
+/* Drag-protection class: prevents Monaco from swallowing PointerEvents
+   so a fast drag still completes. The dragging class is toggled by
+   MobileLabRoot on Divider onPointerDown / onPointerUp. */
+.mobile-lab-dragging .mobile-lab-editor,
+.mobile-lab-dragging .mobile-lab-viewer { pointer-events: none; }
+.mobile-lab-dragging .mobile-divider { pointer-events: auto; }
 
-.mobile-tabbar {
-  flex: none;
-  display: flex;
-  gap: 4px;
-  padding: 6px 6px 8px;
-  border-top: 1px solid hsl(var(--border));
+/* Hide dialog style inside mobile shell wrapper but keep desktop 404 fallback */
+.lab-shell-mobile > div[role='dialog']:not(.mobile-sheet-root) { display: none; }
+
+/* ---------- Drag divider ---------- */
+
+.mobile-divider {
+  position: relative;
+  height: 18px;
   background: hsl(var(--card));
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: none;
-  z-index: 3;
+  border-bottom: 1px solid hsl(var(--border));
+  touch-action: none;
+  cursor: row-resize;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
-.mobile-tabbar::-webkit-scrollbar { display: none; }
 
-.mobile-tab {
-  flex: 1 1 auto;
-  min-height: 44px; /* iOS HIG minimum touch target */
-  padding: 0 10px;
-  border-radius: 0.5rem;
-  border: 1px solid transparent;
+.mobile-divider::before {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; top: 0; bottom: 0;
   background: transparent;
-  color: hsl(var(--muted-foreground));
-  font-weight: 700;
-  font-size: 12px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  transition: background 0.12s, color 0.12s, border-color 0.12s;
 }
 
-.mobile-tab-active {
-  background: hsl(var(--primary));
-  color: hsl(var(--primary-foreground));
-  border-color: hsl(var(--primary));
-  box-shadow: 0 0 0 1px hsl(var(--primary) / 0.6) inset, 0 -1px 0 hsl(var(--primary) / 0.4);
+.mobile-divider[data-dragging='true'] {
+  background: hsl(var(--primary) / 0.10);
+}
+
+.mobile-divider-handle {
+  position: absolute;
+  left: 50%; top: 50%;
+  transform: translate(-50%, -50%);
+  display: inline-flex;
+  align-items: center; justify-content: center;
+  height: 18px;
+  padding: 0 16px;
+  pointer-events: none;
+}
+
+.mobile-divider-disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 /* ---------- Bottom action bar (Run/Stop/Reset/Files/Settings) ---------- */
 
 .mobile-runbar {
-  flex: none;
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
   display: grid;
   grid-template-columns: 2fr 1fr 1fr 1fr 1fr;
   gap: 8px;
   padding: 8px 12px calc(8px + var(--safe-bottom));
   border-top: 1px solid hsl(var(--border));
   background: hsl(var(--card));
-  position: sticky;
-  bottom: 0;
-  z-index: 5;
+  z-index: 25;
+  height: var(--runbar-h, 60px);
 }
 
 .mobile-run-btn,
@@ -763,15 +785,6 @@ pre, code, .font-mono {
   flex-direction: column;
   background: hsl(var(--background));
 }
-
-/* Focus mode CSS: only hide chrome, keep action/tab bars visible. */
-.mobile-lab-typing .mobile-lab-header,
-.mobile-lab-typing .mobile-langstrip,
-.mobile-lab-typing .file-tabs-wrap { display: none; }
-
-.mobile-lab-maximized .mobile-runbar,
-.mobile-lab-maximized .mobile-tabbar { display: none; }
-.mobile-lab-maximized .mobile-lab-main { flex: 1; }
 
 /* ---------- Bottom sheet ---------- */
 
@@ -1170,21 +1183,169 @@ pre, code, .font-mono {
 }
 .mobile-preview-fullscreen .mobile-preview-canvas { height: calc(100dvh - 56px); }
 
-/* ---------- Swipe hint edges ---------- */
+/* ============================================================================
+ * MOBILE LAB v4 — DYNAMIC VIEWER
+ * Language-aware content that swaps between Preview / Console · Output / Errors
+ * =========================================================================== */
 
-.mobile-swipe-hint {
-  position: absolute; top: 50%; transform: translateY(-50%);
-  width: 32px; height: 64px;
-  border-radius: 9999px;
+.mobile-viewer {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: hsl(var(--background));
+  overflow: hidden;
+}
+
+.mobile-viewer-preview,
+.mobile-viewer-runtime,
+.mobile-viewer-errors {
+  height: 100%;
+}
+
+.mobile-viewer-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 10px;
+  height: 32px;
+  border-bottom: 1px solid hsl(var(--border));
+  background: hsl(var(--card));
+}
+
+.mobile-viewer-title {
+  font-size: 12px;
+  font-weight: 800;
+  color: hsl(var(--foreground));
+  letter-spacing: 0.02em;
+}
+
+.mobile-viewer-x {
+  width: 32px; height: 32px;
   border: 1px solid hsl(var(--border));
-  background: hsl(var(--card) / 0.85);
-  color: hsl(var(--muted-foreground));
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  border-radius: 0.4rem;
   display: inline-flex; align-items: center; justify-content: center;
-  z-index: 4;
+}
+
+/* Sub-tab strip inside the runtime viewer — Console / Output */
+.mobile-viewer-subtabs {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px;
+  height: 36px;
+  border-bottom: 1px solid hsl(var(--border));
+  background: hsl(var(--card));
+}
+
+.mobile-viewer-subtab {
+  display: inline-flex; align-items: center;
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 0.45rem;
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--background));
+  color: hsl(var(--muted-foreground));
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
-.mobile-swipe-hint-prev { right: 4px; }
-.mobile-swipe-hint-next { left: 4px; }
+
+.mobile-viewer-subtab-active {
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  border-color: hsl(var(--primary));
+}
+
+.mobile-viewer-filename {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  direction: ltr;
+  font-family: var(--app-font-mono);
+  font-size: 11px;
+  color: hsl(var(--muted-foreground));
+  margin-inline-start: 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mobile-viewer-toolbar {
+  flex: none;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 10px;
+  height: 32px;
+  border-bottom: 1px solid hsl(var(--border));
+  background: hsl(var(--card));
+}
+
+.mobile-tool-btn {
+  width: 32px; height: 32px;
+  border-radius: 0.4rem;
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  display: inline-flex; align-items: center; justify-content: center;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mobile-viewer-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  padding: 10px 12px;
+  background: hsl(var(--background));
+}
+
+.mobile-viewer-body-mono {
+  font-family: var(--app-font-mono);
+  font-size: 16px;
+  line-height: 1.55;
+}
+
+.mobile-viewer-pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: var(--app-font-mono);
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.mobile-viewer-line {
+  display: flex; align-items: baseline; gap: 8px;
+  padding: 3px 0;
+  font-family: var(--app-font-mono);
+  font-size: 15px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+  border-bottom: 1px solid hsl(var(--border) / 0.4);
+}
+.mobile-viewer-line:last-child { border-bottom: 0; }
+
+.mobile-viewer-time {
+  color: hsl(var(--muted-foreground) / 0.75);
+  font-size: 10.5px;
+  flex: none;
+  font-family: var(--app-font-mono);
+}
+
+.mobile-viewer-text { flex: 1; min-width: 0; }
+
+.mobile-viewer-line-err { color: hsl(0 84% 50%); }
+.mobile-viewer-line-warn { color: hsl(38 92% 50%); }
+.mobile-viewer-line-system { color: hsl(var(--muted-foreground)); }
+.mobile-viewer-line-result { color: hsl(160 84% 39%); font-weight: 700; }
+.mobile-viewer-line-log { color: hsl(var(--foreground)); }
 
 /* ============================================================================
  * LESSON MODE — mobile layout (LabLessonModePage)

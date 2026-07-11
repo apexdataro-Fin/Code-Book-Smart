@@ -1,39 +1,56 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { LabProject, LabFile, RunMessage, RunError } from '@/lib/lab/types';
+import type { LabProject, LabFile, RunMessage, RunError, LanguageId } from '@/lib/lab/types';
 import { getAdapter } from '@/lib/lab/registry';
-import { addFile, removeFile, renameFile, setActiveFile, setFileContent, switchActiveFileLanguage, updateProject } from '@/lib/lab/projectManager';
+import {
+  addFile, removeFile, renameFile, setActiveFile, setFileContent,
+  switchActiveFileLanguage, updateProject,
+} from '@/lib/lab/projectManager';
 import { runProject } from '@/lib/lab/executionEngine';
 import { saveProject, broadcastLabSaved } from '@/lib/lab/storage';
-import { readLastMobileTab, writeLastMobileTab, type MobileTabId } from '@/lib/lab/storage';
-import { loadPyodideSingleton, pyodideStatus, resetPyodide, subscribePyodide, type PyodideState } from '@/lib/lab/pyodideLoader';
+import {
+  readDividerRatio, writeDividerRatio, MOBILE_DIVIDER_BOUNDS,
+} from '@/lib/lab/storage';
+import { useViewportUnits } from '@/lib/lab/mobileDetect';
+import {
+  loadPyodideSingleton, pyodideStatus, resetPyodide, subscribePyodide, type PyodideState,
+} from '@/lib/lab/pyodideLoader';
 
-import { MobileBottomSheet } from './MobileBottomSheet';
-import { MobileSwipeHint, MobileTabBar } from './MobileTabBar';
 import { MobileRunBar } from './MobileRunBar';
 import { MobileLanguageDropdown } from './MobileLanguageDropdown';
 import { MobileFilesSheet } from './MobileFilesSheet';
 import { MobileSettingsSheet } from './MobileSettingsSheet';
-import { MobileConsoleSheet } from './MobileConsoleSheet';
-import { MobileOutputSheet } from './MobileOutputSheet';
-import { MobileErrorsSheet } from './MobileErrorsSheet';
-import { MobilePreviewFrame } from './MobilePreviewFrame';
+import { MobileBottomSheet } from './MobileBottomSheet';
 import { MobileEditor } from './MobileEditor';
+import { MobileDynamicViewer } from './MobileDynamicViewer';
+import { DragDivider } from './DragDivider';
 import { cn } from '@/lib/utils';
 
 /**
- * MobileLabRoot — phone-first orchestrator for Smart Code Lab.
+ * MobileLabRoot v4 — phone-first IDE.
  *
- *   - One tab open at a time (Editor / Console / Preview / Output / Errors).
- *   - Files and Settings open as bottom sheets (NOT tabs).
- *   - Bottom action bar (Run · Stop · Reset · Files · Settings) ALWAYS
- *     visible — uses safe-area-inset-bottom for iPhone.
- *   - Bottom content-tab bar for explicit tap targeting + descriptive
- *     labels.
- *   - Swipe horizontally between ADJACENT content tabs.
- *   - Editor focus mode: Monaco focusin/focusout toggles a class so
- *     non-essential chrome is hidden while typing.
- *   - Double-tap on the Monaco host toggles "maximized editor" mode.
- *   - Last tab persists across reloads.
+ *   ┌─────────────────────────────┐  (.mobile-lab-header, 36 px)
+ *   │ 🐍 Python · main.py     ⋮  │
+ *   ├─────────────────────────────┤
+ *   │ Dynamic Viewer (--vr-h)    │  Preview / Console · Output / Errors
+ *   ├────═══ DragDivider ═══──────┤  18 px hit zone + 32×4 px grip
+ *   │ Monaco Editor (--er-h)     │
+ *   ├─────────────────────────────┤
+ *   │ Run · ↺ · 📂 · ⚙           │  (.mobile-runbar, position: absolute, bottom 0, ALWAYS VISIBLE)
+ *   └─────────────────────────────┘
+ *
+ * Layout (no scrolling inside the lab):
+ *   .mobile-lab-ide { height: var(--vvh); display: grid; grid-template-rows: 36px auto 18px 1fr; padding-bottom: runbar; }
+ *   Viewer height var(--vr-h) is computed as calc(var(--vvh) * ratio - 36px).
+ *   Editor fills the remaining grid row (1fr) plus the available space below the runbar.
+ *
+ * Drag protection: when the user is dragging the divider, we add a
+ * `mobile-lab-dragging` class on the root — CSS uses this to set
+ * `pointer-events: none` on the editor host and viewer so Monaco
+ * doesn't swallow pointermove events.
+ *
+ * Visual Viewport: useViewportUnits() publishes --vvh / --vvw to <html>.
+ * When the on-screen keyboard opens, --vvh shrinks, the editor shrinks,
+ * the runbar stays anchored.
  */
 
 interface MobileLabRootProps {
@@ -52,40 +69,54 @@ const DEFAULT_SETTINGS = {
   minimap: false,
 };
 
+// Runbar height used to offset the grid (used as a constant for
+// the bottom padding on the lab root).
+const RUNBAR_RESERVED_PX = 60;
+
 export function MobileLabRoot({ initial, onProjectChange, readOnly }: MobileLabRootProps) {
+  /* viewport + visual viewport (drives layout height) */
+  const vv = useViewportUnits();
+
+  /* project */
   const [project, setProject] = useState<LabProject>(initial);
   const projectRef = useRef(project);
   projectRef.current = project;
 
-  // Last opened tab restored from localStorage.
-  const [tab, setTab] = useState<MobileTabId>(() => readLastMobileTab());
-  const writeTab = useCallback((t: MobileTabId) => { writeLastMobileTab(t); setTab(t); }, []);
-
+  /* run state */
   const [messages, setMessages] = useState<RunMessage[]>([]);
   const [errors, setErrors] = useState<RunError[]>([]);
   const [outputText, setOutputText] = useState('');
   const [isRunning, setIsRunning] = useState(false);
 
-  const [maximized, setMaximized] = useState(false);
-  const [focused, setFocused] = useState(false);
-
+  /* ui overlays */
   const [filesSheetOpen, setFilesSheetOpen] = useState(false);
   const [settingsSheetOpen, setSettingsSheetOpen] = useState(false);
 
+  /* divider ratio (persisted) */
+  const [ratio, setRatio] = useState<number>(() => readDividerRatio());
+  const setAndPersistRatio = useCallback((r: number) => {
+    setRatio(r);
+    writeDividerRatio(r);
+  }, []);
+
+  /* dragging state (drives CSS pointer-events guard) */
+  const [dragging, setDragging] = useState<boolean>(false);
+
+  /* pyodide */
   const [pyState, setPyState] = useState<PyodideState>(() => pyodideStatus());
   useEffect(() => {
     const unsub = subscribePyodide(setPyState);
-    return () => { unsub(); };
+    return () => unsub();
   }, []);
 
+  /* derived — active file + language + preview */
   const active = useMemo(
     () => project.files.find((f) => f.id === project.activeId) ?? project.files[0],
     [project],
   );
-  const activeLang = active?.language ?? project.language;
+  const activeLang: LanguageId = active?.language ?? project.language;
   const activeAdapter = useMemo(() => getAdapter(activeLang), [activeLang]);
 
-  // Preview HTML via adapter.
   const previewHtml = useMemo<string>(() => {
     if (!active) return '';
     try {
@@ -93,23 +124,15 @@ export function MobileLabRoot({ initial, onProjectChange, readOnly }: MobileLabR
     } catch { return ''; }
   }, [project, active, activeAdapter]);
 
-  const showPreview = !!previewHtml;
-  const isPythonWorkspace = activeLang === 'python';
+  /* python readiness */
+  const isPythonWorkspace = activeLang === 'python' || project.files.some((f) => f.language === 'python');
   const pythonReady = pyState.status === 'ready';
   const pythonLoading = isPythonWorkspace && pyState.status === 'loading';
   const pythonError = isPythonWorkspace && pyState.status === 'error';
   const pythonPercent = Math.round((pyState.progress || 0) * 100);
   const runDisabled = isRunning || (isPythonWorkspace && !pythonReady);
 
-  // Compute the swipe order (preview may be skipped if no preview).
-  const tabOrder = useMemo<MobileTabId[]>(() => {
-    const order: MobileTabId[] = ['editor', 'console'];
-    if (showPreview) order.push('preview');
-    order.push('output', 'errors');
-    return order;
-  }, [showPreview]);
-
-  // Persist whenever settings change.
+  /* persist project */
   useEffect(() => {
     if (onProjectChange && project.id !== initial.id) onProjectChange(project);
     saveProject(project);
@@ -117,7 +140,7 @@ export function MobileLabRoot({ initial, onProjectChange, readOnly }: MobileLabR
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project]);
 
-  // Auto-preload Pyodide whenever any Python file is present.
+  /* preload pyodide when project contains Python files */
   const hasPythonFile = useMemo(
     () => project.files.some((f) => f.language === 'python'),
     [project.files],
@@ -130,9 +153,8 @@ export function MobileLabRoot({ initial, onProjectChange, readOnly }: MobileLabR
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasPythonFile, readOnly]);
 
-  /* ----------------------------- Actions ----------------------------- */
-
-  const onRun = async () => {
+  /* actions */
+  const onRun = useCallback(async () => {
     setMessages([]);
     setErrors([]);
     setOutputText('');
@@ -154,35 +176,30 @@ export function MobileLabRoot({ initial, onProjectChange, readOnly }: MobileLabR
       setErrors((prev) => [...prev, err]);
       setIsRunning(false);
     }
-  };
+  }, [project]);
 
-  const onStop = async () => {
+  const onStop = useCallback(async () => {
     try {
       const mod = await import('@/lib/lab/executionEngine');
       mod.stop();
     } catch { /* noop */ }
     setIsRunning(false);
-  };
+  }, []);
 
   const onReset = () => setProject(initial);
 
-  const onLanguageChange = (lang: LabProject['language']) => {
+  const onLanguageChange = useCallback((lang: LanguageId) => {
     setProject((p) => switchActiveFileLanguage(p, lang));
-    writeTab('console');
-    setMaximized(true);
-    setFocused(true);
-  };
+  }, []);
 
   const handleAddFile = () => {
     const name = window.prompt('اسم الملف الجديد (مثال: helper.js):', 'untitled.txt');
     if (!name) return;
     setProject((p) => addFile(p, { name, content: '' }));
   };
-
   const handleActivateFile = (fileId: string) => {
     setProject((p) => setActiveFile(p, fileId));
     setFilesSheetOpen(false);
-    writeTab('editor');
   };
   const handleRenameFile = (fileId: string, newName: string) => {
     setProject((p) => renameFile(p, fileId, newName));
@@ -212,112 +229,83 @@ export function MobileLabRoot({ initial, onProjectChange, readOnly }: MobileLabR
   const handleSettingsChange = (next: Partial<LabProject['settings']>) => {
     setProject((p) => updateProject(p, { settings: { ...p.settings, ...next } }));
   };
+  const handleResetSettings = () => setProject((p) => updateProject(p, { settings: { ...DEFAULT_SETTINGS } }));
+  const handleRetryPython = () => { resetPyodide(); loadPyodideSingleton().catch(() => {}); };
+  const handleClearErrors = () => setErrors([]);
 
-  const handleResetSettings = () => {
-    setProject((p) => updateProject(p, { settings: { ...DEFAULT_SETTINGS } }));
-  };
+  /* CSS variables — viewer top region. editor fills remaining grid row 1fr. */
+  const style = {
+    '--vr-h': `calc(var(--vvh, 100dvh) * ${ratio} - 36px)`,
+    '--runbar-h': `${RUNBAR_RESERVED_PX}px`,
+  } as React.CSSProperties;
 
-  const handleRetryPython = () => {
-    resetPyodide();
-    loadPyodideSingleton().catch(() => {});
-  };
+  return (
+    <div
+      className={cn(
+        'mobile-lab-ide',
+        vv.keyboardOpen && 'mobile-lab-keyboard-open',
+        dragging && 'mobile-lab-dragging',
+      )}
+      data-keyboard={vv.keyboardOpen ? 'open' : 'closed'}
+      data-dragging={dragging ? 'true' : 'false'}
+      style={style}
+      dir="rtl"
+    >
+      {/* HEADER (compact 36 px strip) */}
+      <header className="mobile-lab-header" dir="rtl">
+        <MobileLanguageDropdown current={activeLang} onChange={onLanguageChange} />
+        <span className="mobile-lab-filename" title={active?.name}>{active?.name}</span>
+      </header>
 
-  /* --------------------------- Swipe tab nav --------------------------- */
-  // Touch-event-based swipe between adjacent content tabs.
-  // Threshold: 60px horizontal with vertical drift < 80px.
-  const touchStartX = useRef<number | null>(null);
-  const touchStartY = useRef<number | null>(null);
+      {/* DYNAMIC VIEWER (top) */}
+      <section
+        className="mobile-lab-viewer"
+        role="region"
+        aria-label="المعاينة والخرج"
+        style={{ height: 'var(--vr-h)' }}
+      >
+        <MobileDynamicViewer
+          activeFile={active ?? null}
+          language={activeLang}
+          messages={messages}
+          outputText={outputText}
+          errors={errors}
+          previewHtml={previewHtml}
+          onClearMessages={() => setMessages([])}
+          onClearErrors={handleClearErrors}
+        />
+      </section>
 
-  const onTouchStart = (e: React.TouchEvent) => {
-    touchStartX.current = e.touches[0].clientX;
-    touchStartY.current = e.touches[0].clientY;
-  };
-  const onTouchEnd = (e: React.TouchEvent) => {
-    if (touchStartX.current === null || touchStartY.current === null) return;
-    const dx = e.changedTouches[0].clientX - touchStartX.current;
-    const dy = e.changedTouches[0].clientY - touchStartY.current;
-    touchStartX.current = touchStartY.current = null;
-    if (Math.abs(dy) > 80) return; // vertical gesture → not a swipe
-    if (Math.abs(dx) < 60) return;  // too small
-    const idx = tabOrder.indexOf(tab);
-    if (idx < 0) return;
-    if (dx < 0 && idx < tabOrder.length - 1) writeTab(tabOrder[idx + 1]);
-    if (dx > 0 && idx > 0) writeTab(tabOrder[idx - 1]);
-  };
+      {/* DRAG DIVIDER */}
+      <DragDivider
+        ratio={ratio}
+        onRatioChange={setAndPersistRatio}
+        onDraggingChange={setDragging}
+        minRatio={MOBILE_DIVIDER_BOUNDS.min}
+        maxRatio={MOBILE_DIVIDER_BOUNDS.max}
+      />
 
-  /* --------------------------- Render sections --------------------------- */
-  const renderTab = () => {
-    switch (tab) {
-      case 'editor':
-        return active && (
+      {/* EDITOR (Monaco, bottom) — fills remaining grid row. */}
+      <section
+        className="mobile-lab-editor"
+        aria-label="محرر الكود"
+      >
+        {active ? (
           <MobileEditor
             value={active.content}
             language={activeLang}
             settings={project.settings}
             readOnly={readOnly || active.readOnly}
             onChange={handleEditorChange}
-            onFocusChange={setFocused}
-            onToggleMaximize={() => setMaximized((m) => !m)}
           />
-        );
-      case 'console':
-        return <MobileConsoleSheet messages={messages} onClear={() => setMessages([])} />;
-      case 'preview':
-        return <MobilePreviewFrame html={previewHtml} />;
-      case 'output':
-        return <MobileOutputSheet text={outputText} title="خرج التشغيل" />;
-      case 'errors':
-        return <MobileErrorsSheet errors={errors} />;
-    }
-  };
+        ) : (
+          <div className="grid place-items-center h-full text-sm text-muted-foreground">
+            لا يوجد ملف مفتوح.
+          </div>
+        )}
+      </section>
 
-  const canPrev = tabOrder.indexOf(tab) > 0;
-  const canNext = tabOrder.indexOf(tab) < tabOrder.length - 1;
-
-  return (
-    <div
-      className={cn(
-        'mobile-lab-root',
-        focused && tab === 'editor' && 'mobile-lab-typing',
-        maximized && 'mobile-lab-maximized',
-      )}
-      data-tab={tab}
-    >
-      <header className="mobile-lab-header" dir="rtl">
-        <div className="mobile-lab-title-row">
-          <MobileLanguageDropdown current={activeLang} onChange={onLanguageChange} />
-          <div className="mobile-lab-filename" title={active?.name}>{active?.name}</div>
-        </div>
-      </header>
-
-      <main
-        className="mobile-lab-main"
-        onTouchStart={onTouchStart}
-        onTouchEnd={onTouchEnd}
-      >
-        {/* Swipe edge hints — only on adjacent tabs */}
-        <MobileSwipeHint
-          canPrev={canPrev}
-          canNext={canNext}
-          onPrev={() => {
-            const idx = tabOrder.indexOf(tab);
-            if (idx > 0) writeTab(tabOrder[idx - 1]);
-          }}
-          onNext={() => {
-            const idx = tabOrder.indexOf(tab);
-            if (idx < tabOrder.length - 1) writeTab(tabOrder[idx + 1]);
-          }}
-        />
-        <div className="mobile-lab-tab-body">{renderTab()}</div>
-      </main>
-
-      <MobileTabBar
-        current={tab}
-        onChange={writeTab}
-        showPreview={showPreview}
-        errorCount={errors.length}
-      />
-
+      {/* ACTION BAR — position: absolute via CSS, always visible */}
       {!readOnly && (
         <MobileRunBar
           isRunning={isRunning}

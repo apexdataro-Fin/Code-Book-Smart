@@ -6,32 +6,26 @@ import { useEffect, useState } from 'react';
  *   - PRIMARY: `window.matchMedia('(max-width: 768px)')` so the
  *     detection follows the actual viewport at runtime (resize + rotate).
  *   - SECONDARY: user-agent sniff to catch tablets that lie about width
- *     when in portrait (e.g. iPad reports 768+ but is touch-first).
+ *     when portrait.
  *   - SSR-safe: returns `false` on the server until hydrated.
  *
  * Why we don't trust UA alone:
  *   - On a foldable in laptop posture, UA says mobile but viewport says desktop.
- *   - On an iPad in portrait, UA says mobile (if using iPadOS spoofed UA).
- *
- * In any case, the user can rotate / resize, and the hook reruns.
+ *   - On an iPad in portrait, UA says mobile.
  */
 
 export const MOBILE_BREAKPOINT = 768; // matches Tailwind's `md` boundary.
 
 export function checkIsMobile(): boolean {
   if (typeof window === 'undefined') return false;
-  // Width-based check (primary).
   if (window.matchMedia && window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT - 1}px)`).matches) {
     return true;
   }
-  // Tablet tablet-mobile hybrid: small portrait tablet (iPad mini etc.)
-  // ≤ 820px wide AND touch + no mouse — treat as mobile for our purposes.
   if (window.matchMedia && window.matchMedia('(max-width: 820px)').matches) {
     const isTouch = window.matchMedia('(pointer: coarse)').matches;
     const isHov = window.matchMedia('(hover: none)').matches;
     if (isTouch && isHov) return true;
   }
-  // UA fallback.
   const ua = (navigator.userAgent || '').toLowerCase();
   if (/iphone|ipod|android.*mobile|mobile.*android|blackberry|windows phone|opera mini/i.test(ua)) {
     return true;
@@ -46,13 +40,11 @@ export function useIsMobile(): boolean {
     if (typeof window === 'undefined' || !window.matchMedia) return;
     const query = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT - 1}px)`);
     const evalMobile = () => setIsMobile(checkIsMobile());
-    // Modern browsers:
     if ('addEventListener' in query) {
       query.addEventListener('change', evalMobile);
       evalMobile();
       return () => query.removeEventListener('change', evalMobile);
     }
-    // Older Webkit:
     // @ts-expect-error addListener is deprecated but still present on old Safari.
     query.addListener(evalMobile);
     evalMobile();
@@ -81,4 +73,94 @@ export function useIsLandscape(): boolean {
     };
   }, []);
   return isLandscape;
+}
+
+/* =============================================================================
+ * Visual Viewport helpers (Mobile v4)
+ *
+ * Two CSS custom properties are set on <html>:
+ *   --vvh: viewport height NOT counting the on-screen keyboard.
+ *         Equivalent to `100dvh` while keyboard is closed; shrinks when
+ *         keyboard opens.
+ *   --vvw: viewport width (constant per orientation).
+ *
+ * `keyboardOpen` flips to true when `window.innerHeight - visualViewport.height`
+ * exceeds ~120px (a reasonable keyboard-ignoring threshold). This avoids
+ * reacting to URL-bar collapses / Tab switcher overlays.
+ *
+ * ResizeObserver is preferred over the deprecated `resize` event on the
+ * window. It tracks the visualViewport at 60 fps without scroll-jank.
+ * =========================================================================== */
+
+const KEYBOARD_THRESHOLD_PX = 120;
+
+interface ViewportUnits {
+  /** Current visual viewport height in pixels (excludes on-screen keyboard). */
+  vh: number;
+  /** Current visual viewport width in pixels. */
+  vw: number;
+  /** True when the on-screen keyboard is plausibly open. */
+  keyboardOpen: boolean;
+  /** True when the user has just rotated the device (width swap). */
+  rotated: boolean;
+}
+
+/**
+ * useViewportUnits — observes `window.visualViewport` and propagates its
+ * dimensions as a CSS custom property on <html>. Call site: once in
+ * MobileLabRoot.
+ */
+export function useViewportUnits(): ViewportUnits {
+  const [units, setUnits] = useState<ViewportUnits>(() => readViewport());
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const initial = readViewport();
+    setUnits(initial);
+    applyCssVars(initial);
+
+    const vv = window.visualViewport;
+    if (!vv) return;
+
+    // visualViewport fires its own `resize` event when the keyboard
+    // opens / closes or the device rotates. ResizeObserver doesn't
+    // work because VisualViewport isn't an Element.
+    let lastWidth = vv.width || 0;
+    const onViewportChange = () => {
+      const next = readViewport();
+      next.rotated = Math.abs(next.vw - lastWidth) > 0.5 ? false : units.rotated;
+      lastWidth = next.vw;
+      setUnits(next);
+      applyCssVars(next);
+    };
+    vv.addEventListener('resize', onViewportChange);
+    window.addEventListener('orientationchange', onViewportChange);
+    return () => {
+      vv.removeEventListener('resize', onViewportChange);
+      window.removeEventListener('orientationchange', onViewportChange);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return units;
+}
+
+function readViewport(): ViewportUnits {
+  if (typeof window === 'undefined') {
+    return { vh: 0, vw: 0, keyboardOpen: false, rotated: false };
+  }
+  const vv = window.visualViewport;
+  const vh = vv ? Math.max(120, Math.round(vv.height)) : window.innerHeight;
+  const vw = vv ? Math.round(vv.width) : window.innerWidth;
+  const layoutH = window.innerHeight;
+  const keyboardOpen = layoutH - vh > KEYBOARD_THRESHOLD_PX;
+  return { vh, vw, keyboardOpen, rotated: false };
+}
+
+function applyCssVars(u: ViewportUnits) {
+  if (typeof document === 'undefined') return;
+  const root = document.documentElement;
+  root.style.setProperty('--vvh', `${u.vh}px`);
+  root.style.setProperty('--vvw', `${u.vw}px`);
+  root.dataset.keyboard = u.keyboardOpen ? 'open' : 'closed';
 }

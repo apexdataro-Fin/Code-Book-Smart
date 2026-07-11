@@ -147,3 +147,35 @@ export function writeLastLessonTab(tab: MobileLessonTab): void {
   if (typeof localStorage === 'undefined') return;
   try { localStorage.setItem(MOBILE_LESSON_TAB_KEY, tab); } catch { /* ignore */ }
 }
+
+/* ---------- Mobile v4 persistence ---------- */
+
+/**
+ * Vertical divider ratio (viewer height as a fraction of the workspace
+ * inner height, 0..1). Persisted so the user comes back to the same
+ * layout they left.
+ */
+export const MOBILE_DIVIDER_RATIO_KEY = 'sc_lab_mobile_divider_ratio_v1';
+const DIVIDER_MIN = 0.18;
+const DIVIDER_MAX = 0.62;
+const DIVIDER_DEFAULT = 0.36;
+
+export function readDividerRatio(): number {
+  if (typeof localStorage === 'undefined') return DIVIDER_DEFAULT;
+  try {
+    const raw = localStorage.getItem(MOBILE_DIVIDER_RATIO_KEY);
+    const n = raw ? parseFloat(raw) : NaN;
+    if (!isFinite(n)) return DIVIDER_DEFAULT;
+    return Math.min(DIVIDER_MAX, Math.max(DIVIDER_MIN, n));
+  } catch { return DIVIDER_DEFAULT; }
+}
+
+export function writeDividerRatio(r: number): void {
+  if (typeof localStorage === 'undefined') return;
+  try {
+    const clamped = Math.min(DIVIDER_MAX, Math.max(DIVIDER_MIN, r));
+    localStorage.setItem(MOBILE_DIVIDER_RATIO_KEY, clamped.toFixed(3));
+  } catch { /* ignore */ }
+}
+
+export const MOBILE_DIVIDER_BOUNDS = { min: DIVIDER_MIN, max: DIVIDER_MAX, default: DIVIDER_DEFAULT };

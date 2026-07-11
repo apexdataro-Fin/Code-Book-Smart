@@ -31,16 +31,15 @@ import { useIsMobile } from '@/lib/lab/mobileDetect';
 import { cn } from '@/lib/utils';
 
 /**
- * LabShell v3 — shared state host for every Lab page.
+ * LabShell — shared state host for every Lab page.
  *
  * Branches on `useIsMobile()`:
  *   - Mobile  → <MobileLabRoot/> (lazy chunk; same lab bundle)
  *   - Desktop → full split-pane layout (Smart Code Lab v2)
  *
- * The MobileLabRoot is lazy-loaded so the heavier mobile-specific
- * components are fetched only when the user opens the lab from a phone;
- * desktop users still get the lean react-resizable-panels layout with
- * no extra fetch.
+ * MobileLabRoot is lazy-loaded so the heavier mobile-specific components
+ * are fetched only when the user opens the lab from a phone. The Desktop
+ * path remains the lean react-resizable-panels layout.
  */
 
 interface LabShellProps {
@@ -62,25 +61,14 @@ const MobileLabRootLazy: React.ComponentType<{
   import('./mobile/MobileLabRoot').then((m) => ({ default: m.MobileLabRoot })),
 );
 
-function MobileLabFallback() {
-  return (
-    <div className="grid place-items-center h-full text-sm text-muted-foreground">
-      <div className="flex items-center gap-2">
-        <span className="h-5 w-5 rounded-full border-2 border-primary border-r-transparent animate-spin" />
-        تحميل واجهة الهاتف…
-      </div>
-    </div>
-  );
-}
-
 export function LabShell({ project: initial, withFileExplorer, readOnly, hideToolbar, onProjectChange, className }: LabShellProps) {
   const isMobile = useIsMobile();
 
-  // Mobile path: render the dedicated phone shell.
   if (isMobile) {
     return (
       <div className={cn('h-full w-full bg-background lab-shell-mobile', className)} dir="rtl">
-        <Suspense fallback={<MobileLabFallback />}>
+        <Suspense fallback={null}>
+          {/* Mobile chunk ships in the same lab bundle; no visible spinner. */}
           <MobileLabRootLazy initial={initial} onProjectChange={onProjectChange} readOnly={readOnly} />
         </Suspense>
       </div>
@@ -100,7 +88,7 @@ export function LabShell({ project: initial, withFileExplorer, readOnly, hideToo
 }
 
 /* =============================================================================
- * DesktopLabShell — Smart Code Lab v2 layout, untouched.
+ * DesktopLabShell — Smart Code Lab v2 layout (unchanged).
  * =========================================================================== */
 
 function DesktopLabShell({ project: initial, withFileExplorer, readOnly, hideToolbar, onProjectChange, className }: LabShellProps) {
@@ -113,14 +101,12 @@ function DesktopLabShell({ project: initial, withFileExplorer, readOnly, hideToo
   const [outputText, setOutputText] = useState('');
   const [isRunning, setIsRunning] = useState(false);
 
-  // Pyodide subscribed state.
   const [pyState, setPyState] = useState<PyodideState>(() => pyodideStatus());
   useEffect(() => {
     const unsub = subscribePyodide(setPyState);
     return () => { unsub(); };
   }, []);
 
-  // Derived state — memoized so downstream effects don't churn.
   const active = useMemo(
     () => project.files.find((f) => f.id === project.activeId) ?? project.files[0],
     [project],
@@ -128,7 +114,6 @@ function DesktopLabShell({ project: initial, withFileExplorer, readOnly, hideToo
   const activeLang = active?.language ?? project.language;
   const activeAdapter = useMemo(() => getAdapter(activeLang), [activeLang]);
 
-  // Registry-driven preview assembly — single computation reused below.
   const previewHtml = useMemo<string>(() => {
     if (!active) return '';
     try {
@@ -148,7 +133,6 @@ function DesktopLabShell({ project: initial, withFileExplorer, readOnly, hideToo
 
   const [tab, setTab] = useState<OutputTabId>(previewHtml ? 'preview' : 'console');
 
-  // Auto-preload Pyodide whenever any Python file is present.
   const hasPythonFile = useMemo(
     () => project.files.some((f) => f.language === 'python'),
     [project.files],
@@ -157,22 +141,19 @@ function DesktopLabShell({ project: initial, withFileExplorer, readOnly, hideToo
     if (readOnly) return;
     if (!hasPythonFile) return;
     if (pyState.status === 'ready' || pyState.status === 'loading') return;
-    loadPyodideSingleton().catch(() => { /* error handled in UI */ });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasPythonFile, readOnly]);
+    loadPyodideSingleton().catch(() => {});
+  }, [hasPythonFile, readOnly, pyState.status]);
 
-  // Keep latest project in sync with parent and storage (autosave).
   useEffect(() => {
     if (onProjectChange && project.id !== initial.id) onProjectChange(project);
     saveProject(project);
     broadcastLabSaved(project.id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [project]);
+  }, [project, onProjectChange, initial.id]);
 
   const showPreview = !!previewHtml;
   useEffect(() => {
     if (showPreview && tab === 'console' && messages.length === 0) setTab('preview');
-  }, [showPreview]);
+  }, [showPreview, tab, messages.length]);
 
   const onRun = async () => {
     setMessages([]);
@@ -203,9 +184,7 @@ function DesktopLabShell({ project: initial, withFileExplorer, readOnly, hideToo
     setIsRunning(false);
   };
 
-  const onReset = () => {
-    setProject(initial);
-  };
+  const onReset = () => setProject(initial);
 
   const onLanguageChange = (lang: LabProject['language']) => {
     setProject((p) => switchActiveFileLanguage(p, lang));
@@ -234,7 +213,7 @@ function DesktopLabShell({ project: initial, withFileExplorer, readOnly, hideToo
 
   const handleRetryPython = () => {
     resetPyodide();
-    loadPyodideSingleton().catch(() => { /* surfaced via pyState */ });
+    loadPyodideSingleton().catch(() => {});
   };
 
   const isPythonWorkspace = activeLang === 'python';
@@ -251,7 +230,7 @@ function DesktopLabShell({ project: initial, withFileExplorer, readOnly, hideToo
           onRun={onRun}
           onStop={onStop}
           onReset={onReset}
-          onFormat={() => {/* future: invoke activeAdapter.format?.() */ }}
+          onFormat={() => {}}
           onProjectLoaded={handleProjectLoaded}
           isRunning={isRunning}
           runDisabled={runDisabled}
