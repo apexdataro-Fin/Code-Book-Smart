@@ -1,9 +1,18 @@
-import { Shell } from "@/components/Shell";
-import { Link } from "wouter";
-import { Button } from "@/components/ui/button";
-import { ArrowLeft } from "lucide-react";
+import { Shell } from '@/components/Shell';
+import { Link } from 'wouter';
+import { Button } from '@/components/ui/button';
+import { ArrowLeft, BookText, Search, RotateCcw } from 'lucide-react';
+import { incorrectQuestions, useQuizStats } from '@/lib/quiz';
+import { useProgress } from '@/lib/progress';
+import { overallProgress, totalUnitCount } from '@/lib/curriculum';
 
 export default function Intro() {
+  const [progress] = useProgress();
+  const [stats] = useQuizStats();
+  const overall = overallProgress(new Set(Object.keys(progress.completed)));
+  const total = totalUnitCount();
+  const incorrectCount = incorrectQuestions(999, stats).length;
+
   return (
     <Shell>
       <div className="max-w-3xl mx-auto px-6 py-12 space-y-8 animate-in fade-in duration-500">
@@ -54,7 +63,25 @@ export default function Intro() {
           </div>
         </div>
 
-        <div className="pt-8 border-t mt-12 flex justify-end">
+        {/* Quick links */}
+        <div className="pt-8 mt-12 flex flex-wrap items-center justify-end gap-3 text-sm">
+          <Link href="/roadmap" className="px-3 py-2 rounded-md border border-border bg-card hover:border-primary/40 hover:text-primary transition-colors flex items-center gap-2">
+            <BookText className="w-4 h-4" />
+            خارطة المنهج
+          </Link>
+          <Link href="/search" className="px-3 py-2 rounded-md border border-border bg-card hover:border-primary/40 hover:text-primary transition-colors flex items-center gap-2">
+            <Search className="w-4 h-4" />
+            بحث سريع
+          </Link>
+          {incorrectCount > 0 && (
+            <Link href="/quiz/review" className="px-3 py-2 rounded-md border border-secondary/40 bg-secondary/5 text-secondary hover:bg-secondary/10 transition-colors flex items-center gap-2">
+              <RotateCcw className="w-4 h-4" />
+              مراجعة {incorrectCount} سؤالاً خاطئاً
+            </Link>
+          )}
+        </div>
+
+        <div className="pt-6 border-t mt-4 flex justify-end">
           <Link href="/stage/stage-1/unit/unit-2">
             <Button size="lg" className="gap-2">
               ابدأ بالوحدة الأولى
@@ -62,6 +89,12 @@ export default function Intro() {
             </Button>
           </Link>
         </div>
+
+        {overall.done > 0 && (
+          <p className="mt-6 text-xs text-center text-muted-foreground" dir="rtl">
+            سمحت بإكمال {overall.done} من {total} وحدة ({overall.percent}%).
+          </p>
+        )}
       </div>
     </Shell>
   );

@@ -14,10 +14,29 @@ import { Check, Copy } from 'lucide-react';
 interface CodeBlockProps {
   language: string;
   content: string;
+  /** Optional human-readable label shown at the top of the block.
+   *  Typically a filename (e.g. `main.ts`) or a section caption. */
   title?: string;
+  /** Optional filename shown as a separate "filename pill" beside the title. */
+  filename?: string;
 }
 
-export function CodeBlock({ language, content, title }: CodeBlockProps) {
+const LANG_LABEL: Record<string, string> = {
+  python: 'Python',
+  java: 'Java',
+  typescript: 'TypeScript',
+  javascript: 'JavaScript',
+  ts: 'TS',
+  js: 'JS',
+  sql: 'SQL',
+  bash: 'Shell',
+  text: 'Pseudocode',
+  yaml: 'YAML',
+  json: 'JSON',
+  docker: 'Dockerfile',
+};
+
+export function CodeBlock({ language, content, title, filename }: CodeBlockProps) {
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
@@ -25,10 +44,30 @@ export function CodeBlock({ language, content, title }: CodeBlockProps) {
   }, [content, language]);
 
   const handleCopy = async () => {
-    await navigator.clipboard.writeText(content);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    try {
+      await navigator.clipboard.writeText(content);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    } catch (e) {
+      // Fallback for sandboxes without clipboard permission
+      const ta = document.createElement('textarea');
+      ta.value = content;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand('copy');
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1800);
+      } finally {
+        document.body.removeChild(ta);
+      }
+    }
   };
+
+  const headerLabel =
+    LANG_LABEL[language?.toLowerCase()] ?? (language || '').toUpperCase();
 
   return (
     // P0 fix: `unicode-bidi: isolate` on the OUTER wrapper means an
@@ -38,17 +77,35 @@ export function CodeBlock({ language, content, title }: CodeBlockProps) {
     <div
       className="my-6 rounded-lg overflow-hidden border border-border bg-[#1d1f21] no-print-bg shadow-sm"
       dir="ltr"
+      lang="en"
       style={{ unicodeBidi: 'isolate' }}
     >
-      {(title || language) && (
-        <div className="flex items-center justify-between px-4 py-2 bg-black/40 border-b border-white/10 text-white/80 text-xs font-mono">
-          <span>{title || language}</span>
+      {(title || filename || language) && (
+        <div className="flex items-center justify-between gap-3 px-4 py-2 bg-black/40 border-b border-white/10 text-white/80 text-xs font-mono">
+          <div className="flex items-center gap-2 min-w-0">
+            {headerLabel && (
+              <span className="inline-block px-2 py-0.5 rounded-full bg-white/10 uppercase tracking-wider text-[10px] font-bold">
+                {headerLabel}
+              </span>
+            )}
+            {(filename || title) && (
+              <span className="truncate font-bold text-white/90">{filename ?? title}</span>
+            )}
+          </div>
           <button
             onClick={handleCopy}
-            className="hover:text-white transition-colors"
-            title="نسخ الكود"
+            className="hover:text-white transition-colors inline-flex items-center gap-1.5"
+            title={copied ? 'تم نسخ الكود ✓' : 'نسخ الكود'}
+            aria-label={copied ? 'تم نسخ الكود' : 'نسخ الكود'}
           >
-            {copied ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
+            {copied ? (
+              <>
+                <Check className="w-4 h-4 text-green-400" />
+                <span className="text-green-300 text-[10px]">تم</span>
+              </>
+            ) : (
+              <Copy className="w-4 h-4" />
+            )}
           </button>
         </div>
       )}

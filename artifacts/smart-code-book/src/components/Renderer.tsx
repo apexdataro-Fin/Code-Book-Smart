@@ -3,6 +3,8 @@ import { ContentNode } from '@/data/types';
 import { CodeBlock } from './ui/CodeBlock';
 import { Callout } from './ui/Callout';
 import { ChevronDown, ChevronUp } from 'lucide-react';
+import { UnitQuiz } from './UnitQuiz';
+import { renderSegments, shouldBidiWrapParagraph, wrapLatinTokens } from '@/lib/bidi';
 
 export function ContentRenderer({ nodes }: { nodes: ContentNode[] }) {
   return (
@@ -15,15 +17,15 @@ export function ContentRenderer({ nodes }: { nodes: ContentNode[] }) {
 function NodeRenderer({ node }: { node: ContentNode }) {
   switch (node.type) {
     case 'h1':
-      return <h1 className="text-3xl font-bold mt-8 mb-4 text-primary">{node.content}</h1>;
+      return <h1 className="text-3xl font-bold mt-8 mb-4 text-primary">{_renderText(node.content)}</h1>;
     case 'h2':
-      return <h2 className="text-2xl font-bold mt-8 mb-4 border-b border-border pb-2">{node.content}</h2>;
+      return <h2 className="text-2xl font-bold mt-8 mb-4 border-b border-border pb-2">{_renderText(node.content)}</h2>;
     case 'h3':
-      return <h3 className="text-xl font-bold mt-6 mb-3 text-secondary">{node.content}</h3>;
+      return <h3 className="text-xl font-bold mt-6 mb-3 text-secondary">{_renderText(node.content)}</h3>;
     case 'h4':
-      return <h4 className="text-lg font-bold mt-4 mb-2">{node.content}</h4>;
+      return <h4 className="text-lg font-bold mt-4 mb-2">{_renderText(node.content)}</h4>;
     case 'p':
-      return <p className="text-base leading-relaxed text-foreground/80 mb-4 whitespace-pre-wrap">{node.content}</p>;
+      return <Paragraph text={node.content} />;
     case 'ascii':
       return (
         <div className="my-6 p-4 rounded-lg bg-muted text-muted-foreground font-mono text-sm overflow-x-auto whitespace-pre border border-border" dir="ltr">
@@ -59,24 +61,7 @@ function NodeRenderer({ node }: { node: ContentNode }) {
         </ol>
       );
     case 'table':
-      return (
-        <div className="overflow-x-auto my-6 border border-border rounded-lg">
-          <table className="w-full text-sm text-right">
-            <thead className="text-xs text-muted-foreground uppercase bg-muted/50 border-b border-border">
-              <tr>
-                {node.headers.map((h, i) => <th key={i} className="px-6 py-3">{h}</th>)}
-              </tr>
-            </thead>
-            <tbody>
-              {node.rows.map((row, i) => (
-                <tr key={i} className="bg-card border-b border-border last:border-0 hover:bg-muted/30">
-                  {row.map((cell, j) => <td key={j} className="px-6 py-4">{cell}</td>)}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      );
+      return <DataTable headers={node.headers} rows={node.rows} />;
     case 'project':
       return (
         <div className="my-8 rounded-xl border border-primary/20 bg-primary/5 overflow-hidden">
@@ -89,43 +74,121 @@ function NodeRenderer({ node }: { node: ContentNode }) {
         </div>
       );
     case 'active-recall':
-      return <ActiveRecall questions={node.questions} />;
+      return <ActiveRecallInteractive questions={node.questions} />;
     default:
       return null;
   }
 }
 
-function ActiveRecall({ questions }: { questions: { q: string; a: string }[] }) {
+/**
+ * Selective bidi paragraph:
+ *   - Pure-Arabic → keep RTL, no extra wrapping.
+ *   - Mixed (Arabic dominant with embedded Latin tokens like "Big O",
+ *     "PostgreSQL") → split via wrapLatinTokens and render each token
+ *     wrapped in <bdi dir="ltr"> so it stays visually in place while
+ *     Arabic grammatical reordering remains intact.
+ */
+function Paragraph({ text }: { text: string }) {
+  if (shouldBidiWrapParagraph(text)) {
+    return (
+      <p className="text-base leading-relaxed text-foreground/80 mb-4 whitespace-pre-wrap">
+        {renderSegments(wrapLatinTokens(text))}
+      </p>
+    );
+  }
+  return <p className="text-base leading-relaxed text-foreground/80 mb-4 whitespace-pre-wrap">{text}</p>;
+}
+
+/** Heading text renderer uses the same selective bidi logic. */
+function _renderText(text: string) {
+  if (shouldBidiWrapParagraph(text)) {
+    return renderSegments(wrapLatinTokens(text));
+  }
+  return text;
+}
+
+/**
+ * Table cell with `dir="ltr"` only when its content is pure Latin/code
+ * (zero Arabic characters, at least one Latin/digit). Otherwise the
+ * cell inherits the page direction and stays RTL.
+ */
+function DataTableCell({ content }: { content: string }) {
+  const hasArabic = /[\u0600-\u06FF]/.test(content);
+  const hasLatin = /[A-Za-z0-9]/.test(content);
+  if (!hasArabic && hasLatin) {
+    return (
+      <td className="px-6 py-4" dir="ltr" lang="en">
+        {content}
+      </td>
+    );
+  }
+  return <td className="px-6 py-4">{content}</td>;
+}
+
+function DataTable({ headers, rows }: { headers: string[]; rows: string[][] }) {
+  return (
+    <div className="overflow-x-auto my-6 border border-border rounded-lg">
+      <table className="w-full text-sm">
+        <thead className="text-xs text-muted-foreground uppercase bg-muted/50 border-b border-border">
+          <tr>
+            {headers.map((h, i) => (
+              <th key={i} className="px-6 py-3 font-bold">
+                {h}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, i) => (
+            <tr key={i} className="bg-card border-b border-border last:border-0 hover:bg-muted/30">
+              {row.map((cell, j) => (
+                <DataTableCell key={j} content={cell} />
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/**
+ * Interactive Active Recall block. Each question becomes a click-to-reveal
+ * quiz widget (`UnitQuiz`) that records correct/incorrect answers in
+ * localStorage so the learner can review mistakes later. We synthesize
+ * stable question IDs from the question text (djb2 hash) — sufficient
+ * for cross-session localStorage keying.
+ */
+function ActiveRecallInteractive({ questions }: { questions: { q: string; a: string }[] }) {
   return (
     <div className="my-8 border-2 border-secondary/30 rounded-xl overflow-hidden">
       <div className="bg-secondary/10 px-6 py-4 border-b border-secondary/30 font-bold text-secondary-foreground flex items-center gap-2">
-        <span className="text-xl">🧠</span> المراجعة النشطة (Active Recall)
+        <span className="text-xl">🧠</span> المراجعة النشطة (Active Recall) — أجب عن كل سؤال قبل النظر للإجابة
       </div>
-      <div className="p-0">
-        {questions.map((q, i) => (
-          <ActiveRecallItem key={i} q={q.q} a={q.a} isLast={i === questions.length - 1} />
+      <div className="p-6 space-y-4 bg-card">
+        {questions.map((qq, i) => (
+          <UnitQuiz
+            key={`q-${i}-${qq.q.length}`}
+            question={{
+              id: hashId(qq.q),
+              unitId: '__inline__',
+              unitTitle: 'سؤال داخل الوحدة',
+              stageId: '__inline__',
+              stageNumber: 0,
+              stageTitle: '',
+              path: '',
+              q: qq.q,
+              a: qq.a,
+            }}
+          />
         ))}
       </div>
     </div>
   );
 }
 
-function ActiveRecallItem({ q, a, isLast }: { q: string; a: string; isLast: boolean }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div className={`border-b border-border/50 ${isLast ? 'border-0' : ''}`}>
-      <button
-        onClick={() => setOpen(!open)}
-        className="w-full text-right px-6 py-4 flex items-center justify-between hover:bg-muted/50 transition-colors"
-      >
-        <span className="font-semibold">{q}</span>
-        {open ? <ChevronUp className="w-5 h-5 text-muted-foreground" /> : <ChevronDown className="w-5 h-5 text-muted-foreground" />}
-      </button>
-      {open && (
-        <div className="px-6 pb-4 pt-1 text-muted-foreground bg-muted/20 whitespace-pre-wrap">
-          {a}
-        </div>
-      )}
-    </div>
-  );
+function hashId(s: string): string {
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0;
+  return h.toString(36);
 }

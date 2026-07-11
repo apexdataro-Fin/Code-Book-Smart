@@ -253,19 +253,81 @@
   text-align: left;
   border-radius: 0.5rem;
   overflow-x: auto;
+  unicode-bidi: isolate;
 }
 
-/* P1 fix: isolate bidi per paragraph/list-item so a Latin technical
-   term (e.g. "Big O", "O(n)") embedded in a long Arabic paragraph
-   cannot flip surrounding digits or reorder mixed Arabic+Latin runs.
-   `unicode-bidi: isolate` creates a fresh bidi embedding at this
-   boundary, neutralizing the page-level RTL context. */
-.prose p,
-.prose li,
-.prose h1, .prose h2, .prose h3, .prose h4, .prose h5, .prose h6,
-.prose blockquote,
-.prose td, .prose th {
+/* ─── SELECTIVE BIDI ──────────────────────────────────── */
+/* We previously applied heavy blanket `unicode-bidi: isolate` to
+   every prose element. That over-corrects: pure-Arabic paragraphs
+   lost their RTL grammatical reordering slightly, and the rule
+   flattened visual cues. We now keep bidi isolation ONLY on code
+   blocks (above) and let mixed Arabic+Latin paragraphs flow with
+   semantic <bdi dir="ltr"> spans injected by the renderer. */
+
+.prose code {
+  direction: ltr;
+}
+
+.prose td .code,
+.prose th .code {
   unicode-bidi: isolate;
+}
+
+/* ─── READING MODE ─────────────────────────────────────── */
+.reading-mode {
+  --reading-max-width: 78ch;
+}
+
+.reading-mode main {
+  background: hsl(var(--background));
+}
+
+.reading-mode aside {
+  transform: translateX(100%) !important;
+}
+
+.reading-mode .lg\:pr-72 {
+  padding-right: 0 !important;
+}
+
+.reading-mode .reading-container {
+  max-width: var(--reading-max-width);
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: 1.5rem;
+  padding-right: 1.5rem;
+}
+
+.reading-mode .progress-summary,
+.reading-mode .docx-download,
+.reading-mode [data-chrome="chrome"] {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ─── MOBILE OVERFLOW PROTECTION ─────────────────────── */
+html, body {
+  overflow-x: hidden;
+}
+
+body {
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+/* Tables scroll horizontally INSIDE their own wrapper — they must
+   NOT push the page body wider than the viewport. */
+.table-scroll-wrapper {
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+
+/* Code blocks are individually scrollable. The headers/labels
+   inside them must not overflow either. */
+pre, code, .font-mono {
+  max-width: 100%;
 }
 
 /* ─── UTILITY: ELEVATION ─────────────────────────────────── */
