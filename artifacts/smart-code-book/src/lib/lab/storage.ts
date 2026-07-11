@@ -102,3 +102,48 @@ export const LAB_SAVED_EVENT = 'sc:lab-saved';
 export function broadcastLabSaved(projectId: string): void {
   window.dispatchEvent(new CustomEvent(LAB_SAVED_EVENT, { detail: { projectId } }));
 }
+
+/* ---------- Mobile UX persistence ---------- */
+
+/**
+ * Last opened content tab on mobile (Editor | Console | Preview | Output |
+ * Errors). Persisted across page reloads so the user comes back exactly
+ * where they left off.
+ */
+export const MOBILE_TAB_KEY = 'sc_lab_mobile_tab_v1';
+const VALID_MOBILE_TABS = ['editor', 'console', 'preview', 'output', 'errors'] as const;
+export type MobileTabId = typeof VALID_MOBILE_TABS[number];
+
+export function readLastMobileTab(): MobileTabId {
+  if (typeof localStorage === 'undefined') return 'editor';
+  try {
+    const raw = localStorage.getItem(MOBILE_TAB_KEY);
+    if (raw && (VALID_MOBILE_TABS as readonly string[]).includes(raw)) return raw as MobileTabId;
+  } catch { /* ignore */ }
+  return 'editor';
+}
+
+export function writeLastMobileTab(tab: MobileTabId): void {
+  if (typeof localStorage === 'undefined') return;
+  try {
+    localStorage.setItem(MOBILE_TAB_KEY, tab);
+  } catch { /* ignore */ }
+}
+
+/** Last lesson-mode tab on mobile (Lesson | Lab). */
+export const MOBILE_LESSON_TAB_KEY = 'sc_lab_mobile_lesson_tab_v1';
+const VALID_LESSON_TABS = ['lesson', 'lab'] as const;
+export type MobileLessonTab = typeof VALID_LESSON_TABS[number];
+
+export function readLastLessonTab(): MobileLessonTab {
+  if (typeof localStorage === 'undefined') return 'lesson';
+  try {
+    const raw = localStorage.getItem(MOBILE_LESSON_TAB_KEY);
+    if (raw && (VALID_LESSON_TABS as readonly string[]).includes(raw)) return raw as MobileLessonTab;
+  } catch { /* ignore */ }
+  return 'lesson';
+}
+export function writeLastLessonTab(tab: MobileLessonTab): void {
+  if (typeof localStorage === 'undefined') return;
+  try { localStorage.setItem(MOBILE_LESSON_TAB_KEY, tab); } catch { /* ignore */ }
+}

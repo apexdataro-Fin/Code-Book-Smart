@@ -9,6 +9,7 @@ import { runProject } from '@/lib/lab/executionEngine';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertCircle, RefreshCw, Loader2 } from 'lucide-react';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
+import { lazy, Suspense } from 'react';
 
 import { MonacoEditor } from './MonacoEditor';
 import { ConsolePanel } from './ConsolePanel';
@@ -26,38 +27,83 @@ import {
   subscribePyodide,
   type PyodideState,
 } from '@/lib/lab/pyodideLoader';
+import { useIsMobile } from '@/lib/lab/mobileDetect';
 import { cn } from '@/lib/utils';
 
 /**
- * LabShell v2 — shared state host for every Lab page.
+ * LabShell v3 — shared state host for every Lab page.
  *
- *   - Preview HTML is assembled per-adapter (`adapter.preview(...)`).
- *   - LanguageSelector sits at the top of the editor; switching
- *     delegates to `switchActiveFileLanguage` which renames the active
- *     file and resets its content to the new language's template.
- *   - Python runtime is preloaded automatically when LabShell mounts on
- *     a Python workspace — Run remains disabled until 'ready'.
- *   - Errors during Pyodide load surface a friendly banner with a Retry
- *     button that calls `resetPyodide()` + `loadPyodideSingleton()`.
+ * Branches on `useIsMobile()`:
+ *   - Mobile  → <MobileLabRoot/> (lazy chunk; same lab bundle)
+ *   - Desktop → full split-pane layout (Smart Code Lab v2)
+ *
+ * The MobileLabRoot is lazy-loaded so the heavier mobile-specific
+ * components are fetched only when the user opens the lab from a phone;
+ * desktop users still get the lean react-resizable-panels layout with
+ * no extra fetch.
  */
 
 interface LabShellProps {
   project: LabProject;
-  /** Show a file explorer on the left (project mode only). */
   withFileExplorer?: boolean;
-  /** Hide Run/Stop (e.g. when the lesson-coupled page wants read-only browsing). */
   readOnly?: boolean;
-  /** Hide the toolbar entirely. */
   hideToolbar?: boolean;
-  /** Called when the project changes (so the parent can update the URL). */
   onProjectChange?: (p: LabProject) => void;
-  /** Optional custom IDs to override the default container IDs. */
   className?: string;
 }
 
 type OutputTabId = 'console'|'output'|'errors'|'logs'|'preview';
 
+const MobileLabRootLazy: React.ComponentType<{
+  initial: LabProject;
+  onProjectChange?: (p: LabProject) => void;
+  readOnly?: boolean;
+}> = lazy(() =>
+  import('./mobile/MobileLabRoot').then((m) => ({ default: m.MobileLabRoot })),
+);
+
+function MobileLabFallback() {
+  return (
+    <div className="grid place-items-center h-full text-sm text-muted-foreground">
+      <div className="flex items-center gap-2">
+        <span className="h-5 w-5 rounded-full border-2 border-primary border-r-transparent animate-spin" />
+        تحميل واجهة الهاتف…
+      </div>
+    </div>
+  );
+}
+
 export function LabShell({ project: initial, withFileExplorer, readOnly, hideToolbar, onProjectChange, className }: LabShellProps) {
+  const isMobile = useIsMobile();
+
+  // Mobile path: render the dedicated phone shell.
+  if (isMobile) {
+    return (
+      <div className={cn('h-full w-full bg-background lab-shell-mobile', className)} dir="rtl">
+        <Suspense fallback={<MobileLabFallback />}>
+          <MobileLabRootLazy initial={initial} onProjectChange={onProjectChange} readOnly={readOnly} />
+        </Suspense>
+      </div>
+    );
+  }
+
+  return (
+    <DesktopLabShell
+      project={initial}
+      withFileExplorer={withFileExplorer}
+      readOnly={readOnly}
+      hideToolbar={hideToolbar}
+      onProjectChange={onProjectChange}
+      className={className}
+    />
+  );
+}
+
+/* =============================================================================
+ * DesktopLabShell — Smart Code Lab v2 layout, untouched.
+ * =========================================================================== */
+
+function DesktopLabShell({ project: initial, withFileExplorer, readOnly, hideToolbar, onProjectChange, className }: LabShellProps) {
   const [project, setProject] = useState<LabProject>(initial);
   const projectRef = useRef(project);
   projectRef.current = project;
@@ -83,7 +129,6 @@ export function LabShell({ project: initial, withFileExplorer, readOnly, hideToo
   const activeAdapter = useMemo(() => getAdapter(activeLang), [activeLang]);
 
   // Registry-driven preview assembly — single computation reused below.
-  // If no active file or adapter has no preview, previewHtml = ''.
   const previewHtml = useMemo<string>(() => {
     if (!active) return '';
     try {
@@ -103,8 +148,7 @@ export function LabShell({ project: initial, withFileExplorer, readOnly, hideToo
 
   const [tab, setTab] = useState<OutputTabId>(previewHtml ? 'preview' : 'console');
 
-  // Auto-preload Pyodide whenever any Python file is present in the
-  // project AND the runtime is not already ready. Idempotent.
+  // Auto-preload Pyodide whenever any Python file is present.
   const hasPythonFile = useMemo(
     () => project.files.some((f) => f.language === 'python'),
     [project.files],
@@ -125,7 +169,6 @@ export function LabShell({ project: initial, withFileExplorer, readOnly, hideToo
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project]);
 
-  // If showing preview is appropriate and tab is empty console, switch.
   const showPreview = !!previewHtml;
   useEffect(() => {
     if (showPreview && tab === 'console' && messages.length === 0) setTab('preview');
@@ -289,7 +332,6 @@ export function LabShell({ project: initial, withFileExplorer, readOnly, hideToo
                 {tab === 'logs' && <LogsPanel messages={messages} />}
                 {tab === 'preview' && showPreview && <PreviewPanel html={previewHtml} />}
 
-                {/* Python preload status banner — overlay over right pane. */}
                 {isPythonWorkspace && !pythonReady && (
                   <div
                     className={cn(
@@ -346,7 +388,6 @@ function OutputTab({ id, label, active, onClick }: { id: string; label: string; 
   );
 }
 
-// Helper API: discover the active project id (used by some pages).
 export function loadActiveProject(): LabProject | null {
   return getActiveProject();
 }

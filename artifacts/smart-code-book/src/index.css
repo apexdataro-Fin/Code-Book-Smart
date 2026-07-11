@@ -593,3 +593,648 @@ pre, code, .font-mono {
   font-weight: 700;
   opacity: 0.95;
 }
+
+/* ============================================================================
+ * MOBILE LAB v3 — phone-first UX
+ * ============================================================================ */
+
+:root {
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-top: env(safe-area-inset-top, 0px);
+}
+
+/* ---------- Root + layout shell ---------- */
+
+.mobile-lab-root {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh; /* dynamic viewport (Safari/Chrome handle bars) */
+  width: 100%;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  overflow: hidden;
+  position: relative;
+}
+
+.mobile-lab-header {
+  flex: none;
+  padding: calc(var(--safe-top) + 8px) 8px 8px;
+  border-bottom: 1px solid hsl(var(--border));
+  background: hsl(var(--card));
+  z-index: 2;
+}
+
+.mobile-lab-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: nowrap;
+}
+
+.mobile-lab-filename {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--app-font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: hsl(var(--muted-foreground));
+  background: hsl(var(--muted) / 0.5);
+  padding: 4px 8px;
+  border-radius: 0.35rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  direction: ltr;
+  text-align: left;
+}
+
+.mobile-lab-main {
+  flex: 1 1 auto;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
+}
+
+.mobile-lab-tab-body {
+  height: 100%;
+  position: relative;
+}
+
+/* On mobile, hide the desktop split chrome entirely so there is no leftover. */
+.lab-shell-mobile > div[role='dialog'],
+.lab-shell-mobile .lab-shell { display: none; }
+
+/* ---------- Bottom content tab bar ---------- */
+
+.mobile-tabbar {
+  flex: none;
+  display: flex;
+  gap: 4px;
+  padding: 6px 6px 8px;
+  border-top: 1px solid hsl(var(--border));
+  background: hsl(var(--card));
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  z-index: 3;
+}
+.mobile-tabbar::-webkit-scrollbar { display: none; }
+
+.mobile-tab {
+  flex: 1 1 auto;
+  min-height: 44px; /* iOS HIG minimum touch target */
+  padding: 0 10px;
+  border-radius: 0.5rem;
+  border: 1px solid transparent;
+  background: transparent;
+  color: hsl(var(--muted-foreground));
+  font-weight: 700;
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+
+.mobile-tab-active {
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  border-color: hsl(var(--primary));
+  box-shadow: 0 0 0 1px hsl(var(--primary) / 0.6) inset, 0 -1px 0 hsl(var(--primary) / 0.4);
+}
+
+/* ---------- Bottom action bar (Run/Stop/Reset/Files/Settings) ---------- */
+
+.mobile-runbar {
+  flex: none;
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr 1fr;
+  gap: 8px;
+  padding: 8px 12px calc(8px + var(--safe-bottom));
+  border-top: 1px solid hsl(var(--border));
+  background: hsl(var(--card));
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+}
+
+.mobile-run-btn,
+.mobile-action-btn {
+  min-height: 56px;
+  padding: 0 8px;
+  border-radius: 0.6rem;
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-weight: 800;
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  transition: background 0.12s, color 0.12s, border-color 0.12s, transform 0.05s;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mobile-action-btn:active { transform: translateY(1px); background: hsl(var(--accent)); }
+
+.mobile-run-go { background: hsl(var(--primary)); color: hsl(var(--primary-foreground)); border-color: hsl(var(--primary)); }
+.mobile-run-go:active { background: hsl(var(--primary) / 0.92); }
+.mobile-run-stop { background: hsl(var(--destructive)); color: hsl(var(--destructive-foreground)); border-color: hsl(var(--destructive)); }
+.mobile-run-loading {
+  background: hsl(var(--muted)); color: hsl(var(--muted-foreground));
+  cursor: not-allowed; opacity: 0.95;
+}
+.mobile-run-error {
+  background: hsl(var(--destructive) / 0.10); color: hsl(var(--destructive));
+  border-color: hsl(var(--destructive) / 0.40);
+  font-size: 12px;
+}
+
+.mobile-run-error-dot { display: inline-flex; align-items: center; justify-content: center; padding: 0 2px; }
+
+/* ---------- Editor host on mobile ---------- */
+
+.mobile-editor-host {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: hsl(var(--background));
+}
+
+/* Focus mode CSS: only hide chrome, keep action/tab bars visible. */
+.mobile-lab-typing .mobile-lab-header,
+.mobile-lab-typing .mobile-langstrip,
+.mobile-lab-typing .file-tabs-wrap { display: none; }
+
+.mobile-lab-maximized .mobile-runbar,
+.mobile-lab-maximized .mobile-tabbar { display: none; }
+.mobile-lab-maximized .mobile-lab-main { flex: 1; }
+
+/* ---------- Bottom sheet ---------- */
+
+.mobile-sheet-root {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  pointer-events: none;
+}
+.mobile-sheet-visible { pointer-events: auto; }
+.mobile-sheet-hidden { pointer-events: none; }
+
+.mobile-sheet-backdrop {
+  position: absolute;
+  inset: 0;
+  background: hsl(220 11% 6% / 0.50);
+  backdrop-filter: blur(2px);
+  opacity: 0;
+  transition: opacity 0.18s ease;
+}
+.mobile-sheet-visible .mobile-sheet-backdrop { opacity: 1; }
+
+.mobile-sheet-panel {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  background: hsl(var(--card));
+  border-top-left-radius: 16px;
+  border-top-right-radius: 16px;
+  box-shadow: 0 -8px 24px hsl(0 0% 0% / 0.18);
+  display: flex;
+  flex-direction: column;
+  touch-action: none;
+  transform: translateY(110%);
+  transition: transform 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+  padding-bottom: var(--safe-bottom);
+  max-height: 92vh;
+}
+.mobile-sheet-visible .mobile-sheet-panel { transform: translateY(0); }
+
+.mobile-sheet-handle {
+  display: flex;
+  justify-content: center;
+  padding: 10px 0 6px;
+  cursor: grab;
+}
+.mobile-sheet-handle span {
+  width: 36px;
+  height: 4px;
+  border-radius: 9999px;
+  background: hsl(var(--muted-foreground) / 0.45);
+}
+
+.mobile-sheet-titlebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 12px 10px;
+  border-bottom: 1px solid hsl(var(--border));
+}
+.mobile-sheet-titlebar h3 { margin: 0; font-size: 16px; font-weight: 800; }
+
+.mobile-sheet-close {
+  width: 36px; height: 36px;
+  border-radius: 9999px;
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  display: inline-flex; align-items: center; justify-content: center;
+}
+
+.mobile-sheet-content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 12px 12px 12px;
+}
+
+/* ---------- Language picker (mobile) ---------- */
+
+.mobile-lang-trigger {
+  display: inline-flex; align-items: center; gap: 6px;
+  min-height: 44px;
+  padding: 6px 12px;
+  border-radius: 0.6rem;
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.mobile-lang-glyph {
+  display: inline-grid; place-items: center;
+  min-width: 28px; height: 24px; padding: 0 6px;
+  border-radius: 0.3rem;
+  background: hsl(var(--accent));
+  color: hsl(var(--accent-foreground));
+  font-size: 11px; font-weight: 800;
+}
+
+.mobile-lang-list {
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 0 4px 12px;
+}
+
+.mobile-lang-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px;
+  border-radius: 0.6rem;
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  text-align: right;
+  font-size: 14px;
+  min-height: 56px;
+  cursor: pointer;
+}
+
+.mobile-lang-row-active { border-color: hsl(var(--primary)); background: hsl(var(--primary) / 0.08); cursor: default; }
+
+.mobile-lang-glyph-lg {
+  display: inline-grid; place-items: center;
+  width: 36px; height: 32px;
+  border-radius: 0.4rem;
+  background: hsl(var(--accent));
+  color: hsl(var(--accent-foreground));
+  font-size: 12px; font-weight: 800;
+}
+
+.mobile-lang-info { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+
+/* ---------- Files sheet ---------- */
+
+.mobile-files-list { display: flex; flex-direction: column; gap: 8px; list-style: none; padding: 0; margin: 0 0 12px; }
+.mobile-files-row {
+  display: flex; align-items: stretch;
+  border-radius: 0.6rem;
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--background));
+  overflow: hidden;
+}
+.mobile-files-row-active { border-color: hsl(var(--primary)); background: hsl(var(--primary) / 0.06); }
+
+.mobile-files-row-main {
+  flex: 1; display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; min-height: 56px;
+  background: transparent; border: 0; color: inherit; text-align: right;
+  cursor: pointer;
+}
+
+.mobile-files-row-glyph { font-size: 18px; }
+
+.mobile-files-rename-input {
+  flex: 1;
+  min-height: 40px;
+  padding: 6px 10px;
+  border-radius: 0.4rem;
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: var(--app-font-mono);
+  font-size: 14px;
+}
+
+.mobile-files-actions { display: flex; align-items: stretch; gap: 4px; padding: 6px; }
+.mobile-files-icon-btn {
+  min-width: 40px; min-height: 40px;
+  border-radius: 0.4rem;
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--background));
+  color: hsl(var(--muted-foreground));
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.mobile-files-icon-btn:active { transform: translateY(1px); background: hsl(var(--accent)); }
+.mobile-files-icon-confirm { background: hsl(var(--primary)); color: hsl(var(--primary-foreground)); border-color: hsl(var(--primary)); }
+.mobile-files-icon-danger { color: hsl(var(--destructive)); border-color: hsl(var(--destructive) / 0.40); }
+
+.mobile-files-add-btn {
+  width: 100%; min-height: 52px;
+  border-radius: 0.6rem;
+  border: 1px dashed hsl(var(--border));
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-weight: 800; font-size: 14px;
+  cursor: pointer;
+}
+
+/* ---------- Settings sheet ---------- */
+
+.mobile-settings-sheet { display: flex; flex-direction: column; gap: 14px; }
+.mobile-settings-row {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px; min-height: 48px;
+  padding: 10px 12px;
+  border-radius: 0.6rem;
+  background: hsl(var(--background));
+  border: 1px solid hsl(var(--border));
+}
+
+.mobile-settings-row-title { font-size: 13px; font-weight: 700; }
+
+.mobile-stepper { display: inline-flex; align-items: center; gap: 8px; }
+.mobile-stepper-btn {
+  width: 36px; height: 36px; border-radius: 0.4rem;
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--card));
+  font-size: 18px; font-weight: 800;
+  color: hsl(var(--foreground));
+}
+.mobile-stepper-value { min-width: 32px; text-align: center; font-weight: 800; }
+
+.mobile-segmented {
+  display: inline-flex; gap: 4px;
+  border-radius: 0.5rem;
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--card));
+  padding: 4px;
+}
+.mobile-segmented-btn {
+  min-width: 36px; min-height: 32px;
+  padding: 0 10px;
+  border-radius: 0.35rem;
+  border: 0; background: transparent;
+  color: hsl(var(--muted-foreground));
+  font-weight: 700; font-size: 13px;
+}
+.mobile-segmented-active { background: hsl(var(--primary)); color: hsl(var(--primary-foreground)); }
+
+.mobile-switch {
+  width: 44px; height: 26px;
+  border-radius: 9999px; border: 1px solid hsl(var(--border));
+  background: hsl(var(--muted));
+  position: relative; padding: 0;
+  transition: background 0.12s;
+}
+.mobile-switch-on { background: hsl(var(--primary)); }
+.mobile-switch-knob {
+  position: absolute; top: 2px; left: 2px;
+  width: 20px; height: 20px; border-radius: 9999px;
+  background: hsl(var(--background));
+  transition: left 0.12s;
+}
+.mobile-switch-on .mobile-switch-knob { left: 22px; background: hsl(var(--primary-foreground)); }
+
+.mobile-settings-reset-btn {
+  width: 100%; min-height: 48px;
+  border-radius: 0.6rem; border: 1px solid hsl(var(--border));
+  background: hsl(var(--card));
+  color: hsl(var(--foreground));
+  font-weight: 800;
+}
+
+/* ---------- Console / Output / Errors sheets ---------- */
+
+.mobile-output-toolbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 10px;
+  border-bottom: 1px solid hsl(var(--border));
+  background: hsl(var(--card));
+}
+
+.mobile-output-tool-btn {
+  width: 40px; height: 40px;
+  border: 1px solid hsl(var(--border)); background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  border-radius: 0.45rem;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+
+.mobile-output-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 10px 12px;
+  background: hsl(var(--background));
+}
+
+.mobile-output-body-mono {
+  font-family: var(--app-font-mono);
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+.mobile-output-line {
+  display: flex; align-items: baseline; gap: 8px;
+  padding: 4px 0;
+  font-family: var(--app-font-mono);
+  font-size: 16px;
+  line-height: 1.6;
+  white-space: pre-wrap; word-break: break-word;
+}
+.mobile-output-line-error { color: hsl(0 84% 60%); }
+.mobile-output-line-warn { color: hsl(38 92% 50%); }
+.mobile-output-line-system { color: hsl(var(--muted-foreground)); }
+.mobile-output-line-result { color: hsl(160 84% 39%); }
+
+.mobile-output-time { color: hsl(var(--muted-foreground) / 0.75); font-size: 11px; flex: none; }
+.mobile-output-text { flex: 1; min-width: 0; }
+
+.mobile-output-pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: var(--app-font-mono);
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+/* ---------- Errors sheet ---------- */
+
+.mobile-errors-sheet { display: flex; flex-direction: column; height: 100%; }
+.mobile-errors-list { padding: 12px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
+.mobile-error-card {
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--card));
+  border-radius: 0.6rem;
+  padding: 12px;
+}
+.mobile-error-card pre { font-family: var(--app-font-mono); font-size: 12px; }
+
+/* ---------- Preview frame (mobile) ---------- */
+
+.mobile-preview { display: flex; flex-direction: column; height: 100%; }
+.mobile-preview-toolbar {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+  border-bottom: 1px solid hsl(var(--border));
+  background: hsl(var(--card));
+  z-index: 2;
+}
+.mobile-preview-device-toggle {
+  display: inline-flex; gap: 4px; background: hsl(var(--background));
+  border: 1px solid hsl(var(--border)); border-radius: 0.5rem; padding: 3px;
+}
+.mobile-preview-dev-btn {
+  min-height: 32px; min-width: 32px;
+  padding: 0 10px;
+  border: 0; background: transparent;
+  color: hsl(var(--muted-foreground));
+  font-size: 12px; font-weight: 800;
+  border-radius: 0.35rem;
+  display: inline-flex; align-items: center; gap: 4px;
+}
+.mobile-preview-dev-active { background: hsl(var(--primary)); color: hsl(var(--primary-foreground)); }
+
+.mobile-ptr-indicator {
+  background: hsl(var(--muted));
+  color: hsl(var(--muted-foreground));
+  font-size: 12px;
+  display: grid; place-items: center;
+  transition: height 0.08s;
+}
+
+.mobile-preview-canvas {
+  flex: 1; min-height: 0;
+  overflow: auto;
+  background: hsl(var(--muted) / 0.4);
+  display: grid; place-items: center;
+  padding: 12px;
+  scrollbar-width: thin;
+  position: relative;
+}
+
+.mobile-preview-frame-shadow {
+  background: hsl(var(--card));
+  border-radius: 32px;
+  box-shadow:
+    0 0 0 1px hsl(var(--border)),
+    0 0 0 8px hsl(var(--card)),
+    0 12px 32px hsl(0 0% 0% / 0.22);
+  padding: 8px;
+  user-select: none;
+}
+
+.mobile-preview-iframe {
+  border: 0;
+  border-radius: 24px;
+  background: white;
+  display: block;
+  transition: width 0.2s, height 0.2s;
+}
+
+.mobile-preview-empty {
+  display: grid; place-items: center; height: 100%;
+  color: hsl(var(--muted-foreground)); font-size: 13px;
+  padding: 24px; text-align: center;
+}
+
+.mobile-preview-fullscreen {
+  position: fixed; inset: 0; z-index: 70;
+  background: hsl(var(--background));
+}
+.mobile-preview-fullscreen .mobile-preview-canvas { height: calc(100dvh - 56px); }
+
+/* ---------- Swipe hint edges ---------- */
+
+.mobile-swipe-hint {
+  position: absolute; top: 50%; transform: translateY(-50%);
+  width: 32px; height: 64px;
+  border-radius: 9999px;
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--card) / 0.85);
+  color: hsl(var(--muted-foreground));
+  display: inline-flex; align-items: center; justify-content: center;
+  z-index: 4;
+  -webkit-tap-highlight-color: transparent;
+}
+.mobile-swipe-hint-prev { right: 4px; }
+.mobile-swipe-hint-next { left: 4px; }
+
+/* ============================================================================
+ * LESSON MODE — mobile layout (LabLessonModePage)
+ * ============================================================================ */
+
+.mobile-lesson-root {
+  position: relative;
+  display: flex; flex-direction: column;
+  height: 100dvh;
+  background: hsl(var(--background));
+}
+
+.mobile-lesson-tabbar {
+  flex: none;
+  display: flex; gap: 6px;
+  padding: calc(var(--safe-top) + 8px) 12px 8px;
+  border-bottom: 1px solid hsl(var(--border));
+  background: hsl(var(--card));
+}
+
+.mobile-lesson-tab {
+  flex: 1;
+  min-height: 44px;
+  border-radius: 0.5rem;
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--background));
+  color: hsl(var(--muted-foreground));
+  font-weight: 800; font-size: 13px;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.mobile-lesson-tab-active { background: hsl(var(--primary)); color: hsl(var(--primary-foreground)); border-color: hsl(var(--primary)); }
+.mobile-lesson-tab:disabled { opacity: 0.5; }
+
+.mobile-lesson-body {
+  flex: 1; min-height: 0; position: relative;
+  padding-bottom: var(--safe-bottom);
+}
+
+.mobile-lesson-fab {
+  position: fixed;
+  bottom: calc(20px + var(--safe-bottom));
+  left: 16px;
+  z-index: 50;
+  min-height: 48px;
+  padding: 12px 16px;
+  border-radius: 9999px;
+  border: 1px solid hsl(var(--primary));
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  font-weight: 800;
+  box-shadow: 0 8px 24px hsl(var(--primary) / 0.40);
+  display: inline-flex; align-items: center;
+}

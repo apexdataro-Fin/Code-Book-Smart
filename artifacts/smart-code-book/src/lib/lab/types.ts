@@ -70,6 +70,10 @@ export interface LabSettings {
   fontSize: number;
   theme: 'auto' | 'light' | 'dark';
   wordWrap: boolean;
+  /** Mobile-friendly soft-wrap inside editor (long lines break on viewport). */
+  softWrap: boolean;
+  /** Show line numbers in the gutter. */
+  lineNumbers: boolean;
   tabSize: number;
   minimap: boolean;
 }

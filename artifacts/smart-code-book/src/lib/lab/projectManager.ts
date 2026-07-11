@@ -239,6 +239,8 @@ function defaultSettings(_language: LanguageId): LabProject['settings'] {
     fontSize: 14,
     theme: 'auto',
     wordWrap: true,
+    softWrap: true,
+    lineNumbers: true,
     tabSize: 2,
     minimap: false,
   };

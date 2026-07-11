@@ -7,17 +7,24 @@ import { getUnit } from '@/data/book';
 import UnitPage from '@/pages/UnitPage';
 import { consumeLessonHandoff } from '@/lib/lab/lessonBridge';
 import { createProject, getProject, updateProject } from '@/lib/lab/projectManager';
-import { getAdapter } from '@/lib/lab/registry';
-import { BookOpen, Code2 } from 'lucide-react';
+import { BookOpen, Code2, ArrowLeft, ArrowRight } from 'lucide-react';
 import type { LabProject } from '@/lib/lab/types';
+import { useIsMobile } from '@/lib/lab/mobileDetect';
+import { cn } from '@/lib/utils';
+import { readLastLessonTab, writeLastLessonTab, type MobileLessonTab } from '@/lib/lab/storage';
 
 /**
  * Lesson-mode lab: split view.
  *   /lab/lesson/:stageId/:unitId?hl=:labId  — opens the lesson + lab side by side.
  *   /lab/lesson/:stageId/:unitId            — opens lesson + creates lab from handoff.
  *
- * If no handoff is present we still render the lesson + an empty lab.
- * The lab pane reuses LabShell.
+ * Branches on `useIsMobile()`:
+ *   - Desktop → PanelGroup split between lesson pane and LabShell.
+ *   - Mobile  → single Lesson / Lab tab with a lightweight tab bar at
+ *               the top and a floating jump-back FAB at bottom-left so
+ *               the user can switch contexts instantly without losing
+ *               scroll position in either pane. Last selected tab is
+ *               persisted in localStorage across reloads.
  */
 export default function LabLessonModePage() {
   const [, params] = useRoute<{ stageId: string; unitId: string }>('/lab/lesson/:stageId/:unitId');
@@ -25,7 +32,12 @@ export default function LabLessonModePage() {
   const unitId = params?.unitId ?? '';
   const unit = getUnit(stageId, unitId);
   const [project, setProject] = useState<LabProject | null>(null);
-  const [showLab, setShowLab] = useState(true);
+  const [tab, setTab] = useState<MobileLessonTab>(() => readLastLessonTab());
+  const isMobile = useIsMobile();
+
+  useEffect(() => {
+    writeLastLessonTab(tab);
+  }, [tab]);
 
   useEffect(() => {
     if (!unit) return;
@@ -47,20 +59,8 @@ export default function LabLessonModePage() {
       starterCode: starter,
     });
     setProject(updateProject(p, { description: 'مثال من الدرس — يمكنك التعديل.' }));
-    // Encode the project id into the URL so a refresh keeps the lab.
     setQueryParam('hl', p.id);
   }, [unit]);
-
-  // Mobile fallback: toggle between lesson and lab panels.
-  useEffect(() => {
-    const onResize = () => {
-      if (window.innerWidth < 900) setShowLab(false);
-      else setShowLab(true);
-    };
-    onResize();
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
-  }, []);
 
   if (!unit) {
     return (
@@ -70,29 +70,68 @@ export default function LabLessonModePage() {
     );
   }
 
+  /* ----------------------- MOBILE LAYOUT ----------------------- */
+  if (isMobile) {
+    return (
+      <Shell>
+        <div className="mobile-lesson-root" dir="rtl">
+          {/* Top segmented control */}
+          <div className="mobile-lesson-tabbar">
+            <button
+              type="button"
+              className={cn('mobile-lesson-tab', tab === 'lesson' && 'mobile-lesson-tab-active')}
+              aria-pressed={tab === 'lesson'}
+              onClick={() => setTab('lesson')}
+            >
+              <BookOpen className="w-4 h-4 ml-1.5" /> الدرس
+            </button>
+            <button
+              type="button"
+              className={cn('mobile-lesson-tab', tab === 'lab' && 'mobile-lesson-tab-active')}
+              aria-pressed={tab === 'lab'}
+              onClick={() => setTab('lab')}
+              disabled={!project}
+            >
+              <Code2 className="w-4 h-4 ml-1.5" /> المختبر
+            </button>
+          </div>
+
+          {/* Body */}
+          <div className="mobile-lesson-body">
+            {tab === 'lesson' || !project ? (
+              <div className="h-full overflow-y-auto p-3 bg-background">
+                <UnitLessonEmbedded stageId={stageId} unitId={unitId} />
+              </div>
+            ) : (
+              <LabShell project={project} onProjectChange={setProject} />
+            )}
+          </div>
+
+          {/* Floating jump-back FAB */}
+          {project && (
+            <button
+              type="button"
+              className="mobile-lesson-fab"
+              aria-label={tab === 'lesson' ? 'العودة إلى المختبر' : 'العودة إلى الدرس'}
+              onClick={() => setTab(tab === 'lesson' ? 'lab' : 'lesson')}
+            >
+              {tab === 'lesson' ? <Code2 className="w-5 h-5 ml-1.5" /> : <BookOpen className="w-5 h-5 ml-1.5" />}
+              {tab === 'lesson' ? 'المختبر' : 'الدرس'}
+              {tab === 'lesson' ? <ArrowLeft className="w-3.5 h-3.5 mr-1.5" /> : <ArrowRight className="w-3.5 h-3.5 mr-1.5" />}
+            </button>
+          )}
+        </div>
+      </Shell>
+    );
+  }
+
+  /* ----------------------- DESKTOP LAYOUT ----------------------- */
   return (
     <Shell>
-      {/* Mobile segmented control */}
-      <div className="md:hidden flex border-b border-border bg-card" dir="rtl">
-        <button
-          onClick={() => setShowLab(false)}
-          className={`flex-1 px-3 py-2 text-sm font-bold flex items-center justify-center gap-1.5 ${!showLab ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}
-        >
-          <BookOpen className="w-4 h-4" /> الدرس
-        </button>
-        <button
-          onClick={() => setShowLab(true)}
-          className={`flex-1 px-3 py-2 text-sm font-bold flex items-center justify-center gap-1.5 ${showLab ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}
-        >
-          <Code2 className="w-4 h-4" /> المختبر
-        </button>
-      </div>
       <div className="hidden md:block h-[calc(100vh-3.5rem)] min-h-[500px]">
         <PanelGroup direction="horizontal" autoSaveId="lab-lesson">
           <Panel defaultSize={45} minSize={25}>
-            {/* Lesson pane — re-use the existing UnitPage layout, but with
-                its own scroll container and the completion card suppressed
-                while the lab is open (read-only viewing mode). */}
+            {/* Lesson pane — re-use the existing UnitPage layout. */}
             <div className="h-full overflow-y-auto p-4 bg-background" dir="rtl">
               <UnitLessonEmbedded stageId={stageId} unitId={unitId} />
             </div>
@@ -110,22 +149,6 @@ export default function LabLessonModePage() {
             </div>
           </Panel>
         </PanelGroup>
-      </div>
-      {/* Mobile panels */}
-      <div className="md:hidden h-[calc(100vh-7.5rem)] min-h-[400px]">
-        {showLab ? (
-          project ? (
-            <LabShell project={project} onProjectChange={setProject} />
-          ) : (
-            <div className="h-full grid place-items-center text-muted-foreground text-sm px-6 text-center">
-              اضغط زر "افتح في المختبر" داخل الدرس لإحضار مثال الكود إلى هنا.
-            </div>
-          )
-        ) : (
-          <div className="h-full overflow-y-auto p-4 bg-background" dir="rtl">
-            <UnitLessonEmbedded stageId={stageId} unitId={unitId} />
-          </div>
-        )}
       </div>
     </Shell>
   );
