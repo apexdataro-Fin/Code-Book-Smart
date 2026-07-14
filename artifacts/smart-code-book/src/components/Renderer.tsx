@@ -8,11 +8,30 @@ import { UnitQuiz } from './UnitQuiz';
 import { renderSegments, shouldBidiWrapParagraph, wrapLatinTokens } from '@/lib/bidi';
 import { pushLessonHandoff } from '@/lib/lab/lessonBridge';
 import { mapCodeLanguageToLab } from '@/lib/lab/languages';
+import { MermaidRenderer } from './MermaidRenderer';
+import { ColabButton } from './ColabButton';
 
 export function ContentRenderer({ nodes }: { nodes: ContentNode[] }) {
   return (
     <div className="space-y-4">
       {nodes.map((node, i) => <NodeRenderer key={i} node={node} />)}
+    </div>
+  );
+}
+
+/**
+ * Simple LaTeX formula renderer for Book 2.
+ * Renders formula text in a styled math block.
+ */
+function FormulaRenderer({ latex, caption }: { latex: string; caption?: string }) {
+  return (
+    <div className="my-6">
+      <div className="p-4 bg-muted/30 rounded-lg border border-border text-center overflow-x-auto" dir="ltr">
+        <code className="text-lg font-mono text-primary">{latex}</code>
+      </div>
+      {caption && (
+        <p className="text-center text-sm text-muted-foreground mt-2" dir="rtl">{caption}</p>
+      )}
     </div>
   );
 }
@@ -89,6 +108,13 @@ function NodeRenderer({ node }: { node: ContentNode }) {
       );
     case 'active-recall':
       return <ActiveRecallInteractive questions={node.questions} />;
+    // ── Book 2 extensions ──
+    case 'mermaid':
+      return <MermaidRenderer content={node.content} caption={node.caption} />;
+    case 'formula':
+      return <FormulaRenderer latex={node.latex} caption={node.caption} />;
+    case 'colab-link':
+      return <ColabButton notebookUrl={node.notebookUrl} title={node.title} />;
     default:
       return null;
   }

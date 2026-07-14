@@ -79,6 +79,7 @@
     "@monaco-editor/react": "^4.7.0",
     "docx": "^9.7.1",
     "fflate": "^0.8.2",
+    "mermaid": "^11.16.0",
     "monaco-editor": "^0.52.0",
     "prismjs": "^1.30.0"
   }

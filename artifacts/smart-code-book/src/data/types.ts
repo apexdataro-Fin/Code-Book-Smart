@@ -9,7 +9,11 @@ export type ContentNode =
   | { type: 'ul' | 'ol'; items: ContentNode[][] }
   | { type: 'table'; headers: string[]; rows: string[][] }
   | { type: 'project'; title: string; content: ContentNode[] }
-  | { type: 'active-recall'; questions: { q: string; a: string }[] };
+  | { type: 'active-recall'; questions: { q: string; a: string }[] }
+  // ── Book 2 extensions ──
+  | { type: 'mermaid'; content: string; caption?: string }
+  | { type: 'formula'; latex: string; caption?: string }
+  | { type: 'colab-link'; notebookUrl: string; title: string };
 
 export interface UnitDef {
   id: string;
@@ -18,12 +22,19 @@ export interface UnitDef {
   title: string;
   description: string;
   content: ContentNode[];
+  // ── Book 2 extensions ──
+  difficulty?: 1 | 2 | 3 | 4 | 5;
+  prerequisites?: string[];
+  estimatedHours?: number;
+  tags?: string[];
+  certificateId?: string;
 }
 
 export interface StageDef {
   id: string;
   stageNumber: number;
   title: string;
+  description?: string;
   units: UnitDef[];
 }
 

@@ -1,25 +1,37 @@
 import { BookDef, UnitDef } from './types';
-import { stage1 } from './stage1';
-import { stage2 } from './stage2';
-import { stage3 } from './stage3';
-import { stage4 } from './stage4';
-import { stage1PythonSE } from './stage1PythonSE';
+import { stage1Mathematics } from './stage1Mathematics';
+import { stage2NumPy } from './stage2NumPy';
+import { stage3Pandas } from './stage3Pandas';
+import { stage4Matplotlib } from './stage4Matplotlib';
+import { stage5ML } from './stage5ML';
+import { stage6DeepLearning } from './stage6DeepLearning';
+import { stage7NLP } from './stage7NLP';
+import { stage8LLM } from './stage8LLM';
+import { stage9PromptEngineering } from './stage9PromptEngineering';
+import { stage10RAG } from './stage10RAG';
+import { stage11Agents } from './stage11Agents';
+import { stage12MLOps } from './stage12MLOps';
+import { stage13Capstone } from './stage13Capstone';
 
 export const book: BookDef = {
-  title: "Smart Code",
-  subtitle: "هندسة البرمجيات والبرمجة بمساعدة الذكاء الاصطناعي",
+  title: "Smart Code AI",
+  subtitle: "هندسة الذكاء الاصطناعي — من الرياضيات إلى النشر",
   version: "2026",
-  author: "دليل شامل للمبتدئين في هندسة البرمجيات",
+  author: "دليل متكامل لتصبح مهندس ذكاء اصطناعي محترف",
   stages: [
-    // 🆕 Python Expansion v1 (feature/python-expansion-v1):
-    //    Stage-1 gains 20 new units (pyse-1..pyse-12, pydm-1..3, pybr-1..2,
-    //    pycap-1..3). Their unitNumbers are 100–142 (above the existing
-    //    global 1–14 sequence) and ids prefixed to avoid clashes with
-    //    stage-2..stage-4. The existing 5 units of stage-1 are untouched.
-    { ...stage1, units: [...stage1.units, ...stage1PythonSE] },
-    stage2,
-    stage3,
-    stage4
+    stage1Mathematics,
+    stage2NumPy,
+    stage3Pandas,
+    stage4Matplotlib,
+    stage5ML,
+    stage6DeepLearning,
+    stage7NLP,
+    stage8LLM,
+    stage9PromptEngineering,
+    stage10RAG,
+    stage11Agents,
+    stage12MLOps,
+    stage13Capstone,
   ]
 };
 
