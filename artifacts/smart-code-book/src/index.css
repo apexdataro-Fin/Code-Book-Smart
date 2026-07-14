@@ -749,22 +749,11 @@ html, body, .mobile-lab-ide {
   height: var(--runbar-h, 60px);
 }
 
-/* Mobile IDE v5 (mobile-layout-v2): when the action bar lives in the
-   TOP 2-row header strip, we flip it from absolute bottom to static
-   relative, drop the safe-area-inset-bottom (irrelevant at the top),
-   shrink the height to fit a 44 px slot, and tighten the buttons so
-   everything fits comfortably on a 375 px phone. */
-.mobile-runbar.mobile-runbar-top,
-.mobile-runbar[data-placement='top'] {
-  position: static;
-  height: 44px;
-  grid-template-columns: 1.6fr 1fr 1fr 1fr;
-  padding: 0;
-  gap: 6px;
-  border-top: 0;
-  background: transparent;
-  z-index: auto;
-}
+/* The v2 mobile-runbar-top layout was superseded by v6 (mobile-toolbar-v3)
+   where the Lab action bar lives in the global Shell header instead of
+   inside MobileLabRoot. The `mobile-runbar-top` variant is retained
+   only as a one-line no-op hook so any external styling targeting
+   that className still resolves harmlessly. */
 
 .mobile-run-btn,
 .mobile-action-btn {
