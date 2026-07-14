@@ -1161,15 +1161,15 @@ jobs:
 
       - name: بناء صورة Docker
         run: |
-          docker build -t myapp:${{ github.sha }} .
-          docker tag myapp:${{ github.sha }} myapp:latest
+          docker build -t myapp:\${{ github.sha }} .
+          docker tag myapp:\${{ github.sha }} myapp:latest
 
       - name: نشر على السيرفر
         uses: appleboy/ssh-action@v1
         with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          host: \${{ secrets.SERVER_HOST }}
+          username: \${{ secrets.SERVER_USER }}
+          key: \${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             docker pull myapp:latest
             docker stop app || true
