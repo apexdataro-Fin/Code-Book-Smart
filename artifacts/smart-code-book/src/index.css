@@ -611,8 +611,9 @@ pre, code, .font-mono {
   background: hsl(var(--background));
   color: hsl(var(--foreground));
   display: grid;
-  /* 84px 2-row header (language+filename / action-bar) → vr-h viewer → 18px divider → editor fills remaining */
-  grid-template-rows: 84px var(--vr-h, 260px) 18px 1fr;
+  /* 36 px header (Language + filename) → vr-h viewer → 18 px divider → editor fills the rest.
+     The Run · Reset · Files · Settings bar lives in the global Shell header. */
+  grid-template-rows: 36px var(--vr-h, 260px) 18px 1fr;
   overflow: hidden;
   position: relative;
   overscroll-behavior: none;
@@ -625,16 +626,16 @@ html, body, .mobile-lab-ide {
 }
 
 .mobile-lab-header {
-  height: 84px;
+  height: 36px;
   padding: 0 8px;
-  display: grid;
-  grid-template-rows: 36px 44px;
-  gap: 2px;
+  display: flex;
   align-items: center;
+  gap: 8px;
   border-bottom: 1px solid hsl(var(--border));
   background: hsl(var(--card));
   z-index: 2;
   min-width: 0;
+  overflow: hidden;
 }
 
 .mobile-lab-header-row1 {
@@ -642,6 +643,7 @@ html, body, .mobile-lab-ide {
   align-items: center;
   gap: 8px;
   min-width: 0;
+  flex: 1;
 }
 
 .mobile-lab-filename {
@@ -939,16 +941,21 @@ html[data-touch='true'] .mobile-editor-host .cursor {
 /* ---------- Language picker (mobile) ---------- */
 
 .mobile-lang-trigger {
-  display: inline-flex; align-items: center; gap: 6px;
-  min-height: 44px;
-  padding: 6px 12px;
-  border-radius: 0.6rem;
+  display: inline-flex; align-items: center; gap: 5px;
+  min-height: 30px;
+  padding: 4px 10px;
+  border-radius: 0.5rem;
   border: 1px solid hsl(var(--border));
   background: hsl(var(--background));
   color: hsl(var(--foreground));
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 800;
   cursor: pointer;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+
+.mobile-lang-trigger:active {
+  transform: translateY(1px);
 }
 
 .mobile-lang-glyph {
@@ -990,6 +997,85 @@ html[data-touch='true'] .mobile-editor-host .cursor {
 }
 
 .mobile-lang-info { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+
+/* ============================================================================
+ * MOBILE LAB v6 — compact toolbar renders INTO the global Shell header
+ *
+ * The Lab's Run · Reset · Files · Settings buttons are now mounted by
+ * <MobileShellControlBar/> from the Shell header (mobile only). They
+ * live inside `.mobile-shell-control-bar`, a compact 4-button row that
+ * fits between DOCX and the Theme toggle on a 375 px iPhone.
+ * ============================================================================ */
+
+.mobile-shell-control-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  /* Defensive: prevent this row from blowing out the header on tiny
+     screens — even if the row is narrow we'll just clip gracefully
+     instead of wrapping. */
+  flex-shrink: 0;
+}
+
+.shell-icon-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 0.45rem;
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  transition: background 0.12s, color 0.12s, border-color 0.12s, transform 0.05s;
+}
+
+.shell-icon-btn:active { transform: translateY(1px); background: hsl(var(--accent)); }
+
+.shell-icon-btn-primary {
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  border-color: hsl(var(--primary));
+}
+.shell-icon-btn-primary:active { background: hsl(var(--primary) / 0.92); }
+
+.shell-icon-btn-danger {
+  background: hsl(var(--destructive));
+  color: hsl(var(--destructive-foreground));
+  border-color: hsl(var(--destructive));
+}
+.shell-icon-btn-danger:active { background: hsl(var(--destructive) / 0.92); }
+
+.shell-icon-btn-loading {
+  background: hsl(var(--muted));
+  color: hsl(var(--muted-foreground));
+  border-color: hsl(var(--border));
+  cursor: wait;
+  opacity: 0.95;
+}
+
+.shell-icon-btn-error {
+  background: hsl(var(--destructive) / 0.10);
+  color: hsl(var(--destructive));
+  border-color: hsl(var(--destructive) / 0.40);
+}
+
+/* The Small error dot returned inline next to the Run button. */
+.mobile-run-error-dot {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 2px;
+}
+
+/* On the very narrowest phones (iPhone SE 320 px wide), give the
+   global Shell header a tiny extra vertical squeeze so the row
+   doesn't push the page below the top viewport. */
+@media (max-width: 374px) {
+  .mobile-shell-control-bar { gap: 2px; }
+  .shell-icon-btn { width: 30px; height: 30px; }
+}
 
 /* ---------- Files sheet ---------- */
 

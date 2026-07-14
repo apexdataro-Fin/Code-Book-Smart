@@ -15,7 +15,6 @@ import {
   loadPyodideSingleton, pyodideStatus, resetPyodide, subscribePyodide, type PyodideState,
 } from '@/lib/lab/pyodideLoader';
 
-import { MobileRunBar } from './MobileRunBar';
 import { MobileLanguageDropdown } from './MobileLanguageDropdown';
 import { MobileFilesSheet } from './MobileFilesSheet';
 import { MobileSettingsSheet } from './MobileSettingsSheet';
@@ -23,6 +22,10 @@ import { MobileBottomSheet } from './MobileBottomSheet';
 import { MobileEditor } from './MobileEditor';
 import { MobileDynamicViewer } from './MobileDynamicViewer';
 import { DragDivider } from './DragDivider';
+import {
+  setMobileLabControlsSnapshot,
+  type MobileLabControlsSnapshot,
+} from './MobileLabControlsBridge';
 import { cn } from '@/lib/utils';
 
 /**
@@ -72,10 +75,9 @@ const DEFAULT_SETTINGS = {
   minimap: false,
 };
 
-// The action bar moved from bottom (60 px reserved) to top (inside
-// the new ~84 px header strip). This constant is retained for
-// back-compat with other lab modules but is no longer used by the
-// grid layout.
+// The action bar moved out of MobileLabRoot entirely — it now lives
+// in the global Shell header on mobile. This constant is retained
+// for back-compat with other lab modules but is no longer used.
 const RUNBAR_RESERVED_PX = 60;
 
 export function MobileLabRoot({ initial, onProjectChange, readOnly }: MobileLabRootProps) {
@@ -239,11 +241,44 @@ export function MobileLabRoot({ initial, onProjectChange, readOnly }: MobileLabR
   const handleClearErrors = () => setErrors([]);
 
   /* CSS variables — viewer top region. editor fills remaining grid row 1fr.
-   * The 84 px top strip (row 1 language + filename, row 2 action bar) is
-   * subtracted so the new top strip doesn't get clipped by the viewer. */
+   * The mobile-lab-header is now 36 px (only Language + filename) so the
+   * viewer must subtract only that, reclaiming ~48 px of viewport vs v2. */
   const style = {
-    '--vr-h': `calc(var(--vvh, 100dvh) * ${ratio} - 84px)`,
+    '--vr-h': `calc(var(--vvh, 100dvh) * ${ratio} - 36px)`,
   } as React.CSSProperties;
+
+  /* Stable handler refs for the bridge snapshot. We MUST capture the
+     latest render's handlers, but we want the snapshot's reference
+     identity to stay stable as long as nothing meaningful changed —
+     otherwise useSyncExternalStore in Shell would re-render on every
+     MobileLabRoot commit. */
+  const onOpenFilesSnap = useCallback(() => setFilesSheetOpen(true), []);
+  const onOpenSettingsSnap = useCallback(() => setSettingsSheetOpen(true), []);
+
+  /* Push the singleton snapshot whenever volatile state changes. */
+  const stableRetry = handleRetryPython; // handleRetryPython is fresh each render; OK
+  useEffect(() => {
+    const next: MobileLabControlsSnapshot = {
+      isRunning,
+      runDisabled,
+      pythonLoading,
+      pythonPercent,
+      pythonError,
+      onRun,
+      onStop,
+      onReset,
+      onOpenFiles: onOpenFilesSnap,
+      onOpenSettings: onOpenSettingsSnap,
+      onRetryPython: stableRetry,
+    };
+    setMobileLabControlsSnapshot(next);
+    return () => {
+      // Clear the snapshot when leaving /lab/* so the Shell bar disappears.
+      setMobileLabControlsSnapshot(null);
+    };
+    // Intentionally exhaustive — we push every time any field changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isRunning, runDisabled, pythonLoading, pythonPercent, pythonError, onRun, onStop, onReset, stableRetry]);
 
   return (
     <div
@@ -257,30 +292,12 @@ export function MobileLabRoot({ initial, onProjectChange, readOnly }: MobileLabR
       style={style}
       dir="rtl"
     >
-      {/* HEADER (compact 2-row strip ~84 px) */}
+      {/* HEADER (single-row 36 px — just Language + filename) */}
       <header className="mobile-lab-header" dir="rtl">
-        {/* Row 1 — language picker + active filename */}
         <div className="mobile-lab-header-row1">
           <MobileLanguageDropdown current={activeLang} onChange={onLanguageChange} />
           <span className="mobile-lab-filename" title={active?.name}>{active?.name}</span>
         </div>
-        {/* Row 2 — Run · Reset · Files · Settings (moved up from the bottom) */}
-        {!readOnly && (
-          <MobileRunBar
-            placement="top"
-            isRunning={isRunning}
-            onRun={onRun}
-            onStop={onStop}
-            onReset={onReset}
-            onOpenFiles={() => setFilesSheetOpen(true)}
-            onOpenSettings={() => setSettingsSheetOpen(true)}
-            pythonLoading={pythonLoading}
-            pythonPercent={pythonPercent}
-            pythonError={pythonError}
-            onRetryPython={handleRetryPython}
-            runDisabled={runDisabled}
-          />
-        )}
       </header>
 
       {/* DYNAMIC VIEWER (top, just below header) */}

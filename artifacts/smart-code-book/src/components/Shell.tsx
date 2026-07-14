@@ -16,11 +16,15 @@ import {
   RotateCcw,
   Beaker,
   Sparkles,
+  Loader2,
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { downloadDocx } from '@/lib/docxExport';
 import { SearchBar } from '@/components/SearchBar';
+import { useIsMobile } from '@/lib/lab/mobileDetect';
+import { MobileShellControlBar } from '@/components/lab/mobile/MobileShellControlBar';
+import { cn } from '@/lib/utils';
 import {
   broadcastProgressChange,
   completedCount,
@@ -240,6 +244,7 @@ export function Sidebar({ open, setOpen }: { open: boolean; setOpen: (v: boolean
 
 export function Shell({ children, readingFrame = false }: { children: React.ReactNode; readingFrame?: boolean }) {
   const [location] = useLocation();
+  const isMobile = useIsMobile();
   const [sidebarOpen, setSidebarOpen] = useState(() => {
     if (typeof window === 'undefined') return false;
     const saved = localStorage.getItem('sc_sidebar_open');
@@ -247,10 +252,13 @@ export function Shell({ children, readingFrame = false }: { children: React.Reac
     return window.innerWidth >= 1024;
   });
 
-  // Simulator view (/lab/*) gets a route-aware UX: the global search
-  // bar is hidden because the lab itself owns the top toolbar on
-  // mobile. The SearchBar component (and `lib/search`) still work on
-  // every other route — we only suppress the visual instance here.
+  // Simulator view (/lab/*) gets a route-aware UX:
+  //   1. The SearchBar is hidden because the lab owns the top toolbar.
+  //      `lib/search` itself still works on every other route.
+  //   2. On MOBILE only, we inject <MobileShellControlBar/> next to
+  //      DOCX. It reads run state from the singleton bridge written by
+  //      MobileLabRoot and renders the 4 Lab actions (Run · Reset ·
+  //      Files · Settings) inline with the global header.
   const isLabRoute = typeof location === 'string' && location.startsWith('/lab');
 
   const [isDark, setIsDark] = useState(() => {
@@ -318,54 +326,97 @@ export function Shell({ children, readingFrame = false }: { children: React.Reac
         }`}
       >
         <header
-          className="h-14 border-b border-border bg-card/80 backdrop-blur sticky top-0 z-30 flex items-center justify-between px-4 gap-2 no-print"
+          className={cn(
+            'border-b border-border bg-card/80 backdrop-blur sticky top-0 z-30 flex items-center justify-between gap-2 no-print',
+            isMobile ? 'h-12 px-2' : 'h-14 px-4'
+          )}
           data-chrome="chrome"
         >
-          <div className="flex items-center gap-2">
+          <div className={cn('flex items-center', isMobile ? 'gap-1' : 'gap-2')}>
             <Button
               variant="ghost"
-              size="icon"
+              size={isMobile ? 'sm' : 'icon'}
               onClick={() => setSidebarOpen((v) => !v)}
+              className={cn(isMobile && 'h-8 w-8 p-0')}
               title={sidebarOpen ? 'إغلاق القائمة' : 'فتح القائمة'}
+              aria-label="القائمة"
             >
-              <Menu className="w-5 h-5" />
+              <Menu className={isMobile ? 'w-4 h-4' : 'w-5 h-5'} />
             </Button>
             {!isLabRoute && <SearchBar />}
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className={cn('flex items-center', isMobile ? 'gap-1' : 'gap-2')}>
+            {/* Lesson (Reading Mode) button. On mobile we collapse the
+                visible label to icon-only so it fits next to the new
+                Lab control bar. */}
             <Button
               variant={readingOn ? 'default' : 'ghost'}
-              size="sm"
+              size={isMobile ? 'sm' : 'sm'}
               onClick={toggleReading}
-              className="gap-2 text-sm"
+              className={cn(
+                isMobile ? 'h-8 w-8 p-0' : 'gap-2 text-sm'
+              )}
               title="وضع القراءة"
+              aria-label="وضع القراءة"
               aria-pressed={readingOn}
             >
-              <BookText className="w-4 h-4" />
-              <span className="hidden sm:inline">{readingOn ? 'إنهاء القراءة' : 'وضع القراءة'}</span>
+              <BookText className={isMobile ? 'w-4 h-4' : 'w-4 h-4'} />
+              {!isMobile && (
+                <span className="hidden sm:inline">
+                  {readingOn ? 'إنهاء القراءة' : 'وضع القراءة'}
+                </span>
+              )}
             </Button>
 
+            {/* DOCX button. The user requested: keep only the
+                download icon + "DOCX". We drop both "تحميل" (in the
+                idle label) and "جاري التحميل..." (during async work);
+                show a small spinner in place while downloading. */}
             <Button
               variant="outline"
               size="sm"
               onClick={handleDownload}
               disabled={isDownloading}
-              className="gap-2 text-sm text-muted-foreground hover:text-foreground docx-download"
+              className={cn(
+                'docx-download',
+                isMobile
+                  ? 'h-8 px-2 gap-1 text-[10px] font-bold tracking-wider'
+                  : 'gap-2 text-sm text-muted-foreground hover:text-foreground'
+              )}
               data-chrome="chrome"
               title="تحميل الكتاب بصيغة Word"
+              aria-label="تحميل الكتاب بصيغة Word"
             >
-              <Download className="w-4 h-4" />
-              {isDownloading ? 'جاري التحميل...' : 'تحميل DOCX'}
+              {isDownloading ? (
+                <Loader2 className={isMobile ? 'w-3.5 h-3.5 animate-spin' : 'w-4 h-4 animate-spin'} />
+              ) : (
+                <Download className={isMobile ? 'w-3.5 h-3.5' : 'w-4 h-4'} />
+              )}
+              DOCX
             </Button>
 
+            {/* Lab execution toolbar (Run · Reset · Files · Settings)
+                rendered INTO the global header on mobile only. Reads
+                from the singleton bridge written by MobileLabRoot. */}
+            {isMobile && isLabRoute && <MobileShellControlBar />}
+
+            {/* Theme toggle. Size kept identical (icon button); the
+                icon itself shrank slightly on mobile to keep the row
+                tidy. */}
             <Button
               variant="ghost"
-              size="icon"
+              size={isMobile ? 'sm' : 'icon'}
               onClick={() => setIsDark((d) => !d)}
+              className={cn(isMobile && 'h-8 w-8 p-0')}
               title={isDark ? 'الوضع النهاري' : 'الوضع الليلي'}
+              aria-label={isDark ? 'الوضع النهاري' : 'الوضع الليلي'}
             >
-              {isDark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+              {isDark ? (
+                <Sun className={isMobile ? 'w-4 h-4' : 'w-5 h-5'} />
+              ) : (
+                <Moon className={isMobile ? 'w-4 h-4' : 'w-5 h-5'} />
+              )}
             </Button>
           </div>
         </header>
