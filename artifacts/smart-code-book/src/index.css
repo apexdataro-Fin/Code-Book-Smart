@@ -611,9 +611,8 @@ pre, code, .font-mono {
   background: hsl(var(--background));
   color: hsl(var(--foreground));
   display: grid;
-  /* 36px header → vr-h viewer → 18px divider → editor fills remaining → bottom 60px reserved for absolute runbar */
-  grid-template-rows: 36px var(--vr-h, 260px) 18px 1fr;
-  padding-bottom: var(--runbar-h, 60px);
+  /* 84px 2-row header (language+filename / action-bar) → vr-h viewer → 18px divider → editor fills remaining */
+  grid-template-rows: 84px var(--vr-h, 260px) 18px 1fr;
   overflow: hidden;
   position: relative;
   overscroll-behavior: none;
@@ -626,14 +625,22 @@ html, body, .mobile-lab-ide {
 }
 
 .mobile-lab-header {
-  height: 36px;
+  height: 84px;
   padding: 0 8px;
-  display: flex;
+  display: grid;
+  grid-template-rows: 36px 44px;
+  gap: 2px;
   align-items: center;
-  gap: 8px;
   border-bottom: 1px solid hsl(var(--border));
   background: hsl(var(--card));
   z-index: 2;
+  min-width: 0;
+}
+
+.mobile-lab-header-row1 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   min-width: 0;
 }
 
@@ -740,6 +747,23 @@ html, body, .mobile-lab-ide {
   height: var(--runbar-h, 60px);
 }
 
+/* Mobile IDE v5 (mobile-layout-v2): when the action bar lives in the
+   TOP 2-row header strip, we flip it from absolute bottom to static
+   relative, drop the safe-area-inset-bottom (irrelevant at the top),
+   shrink the height to fit a 44 px slot, and tighten the buttons so
+   everything fits comfortably on a 375 px phone. */
+.mobile-runbar.mobile-runbar-top,
+.mobile-runbar[data-placement='top'] {
+  position: static;
+  height: 44px;
+  grid-template-columns: 1.6fr 1fr 1fr 1fr;
+  padding: 0;
+  gap: 6px;
+  border-top: 0;
+  background: transparent;
+  z-index: auto;
+}
+
 .mobile-run-btn,
 .mobile-action-btn {
   min-height: 56px;
@@ -757,6 +781,16 @@ html, body, .mobile-lab-ide {
   transition: background 0.12s, color 0.12s, border-color 0.12s, transform 0.05s;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
+}
+
+/* In the top placement the strip is only 44 px tall — buttons can
+   shrink and drop their heavy borders to feel airy. */
+.mobile-runbar.mobile-runbar-top .mobile-run-btn,
+.mobile-runbar.mobile-runbar-top .mobile-action-btn {
+  min-height: 40px;
+  padding: 0 6px;
+  font-size: 12px;
+  border-radius: 0.5rem;
 }
 
 .mobile-action-btn:active { transform: translateY(1px); background: hsl(var(--accent)); }

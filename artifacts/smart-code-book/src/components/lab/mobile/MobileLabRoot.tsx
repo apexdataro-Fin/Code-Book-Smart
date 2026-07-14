@@ -26,22 +26,21 @@ import { DragDivider } from './DragDivider';
 import { cn } from '@/lib/utils';
 
 /**
- * MobileLabRoot v4 — phone-first IDE.
+ * MobileLabRoot v5 — phone-first IDE (mobile-layout-v2).
  *
- *   ┌─────────────────────────────┐  (.mobile-lab-header, 36 px)
- *   │ 🐍 Python · main.py     ⋮  │
- *   ├─────────────────────────────┤
- *   │ Dynamic Viewer (--vr-h)    │  Preview / Console · Output / Errors
- *   ├────═══ DragDivider ═══──────┤  18 px hit zone + 32×4 px grip
- *   │ Monaco Editor (--er-h)     │
- *   ├─────────────────────────────┤
- *   │ Run · ↺ · 📂 · ⚙           │  (.mobile-runbar, position: absolute, bottom 0, ALWAYS VISIBLE)
- *   └─────────────────────────────┘
+ *   ┌──────────────────────────────────────────┐  (.mobile-lab-header, ~84 px)
+ *   │ 🐍 Python · main.py          [row 1]     │  Language dropdown + filename
+ *   │ Run · ↺ · 📂 · ⚙           [row 2]     │  Action bar (was at the bottom)
+ *   ├──────────────────────────────────────────┤
+ *   │ Dynamic Viewer (--vr-h)                  │  Preview / Console · Output / Errors
+ *   ├────══ DragDivider ═════════════════───── ┤  18 px hit zone + 32×4 px grip
+ *   │ Monaco Editor (--er-h)                   │
+ *   └────────────────────────────────────────────┘  (footer chrome gone — reclaimed for the viewport)
  *
  * Layout (no scrolling inside the lab):
- *   .mobile-lab-ide { height: var(--vvh); display: grid; grid-template-rows: 36px auto 18px 1fr; padding-bottom: runbar; }
- *   Viewer height var(--vr-h) is computed as calc(var(--vvh) * ratio - 36px).
- *   Editor fills the remaining grid row (1fr) plus the available space below the runbar.
+ *   .mobile-lab-ide { height: var(--vvh); display: grid; grid-template-rows: 84px var(--vr-h) 18px 1fr; }
+ *   Viewer height var(--vr-h) is computed as calc(var(--vvh) * ratio - 84px) so the viewer
+ *   grabs `ratio * vvh` minus the new 84 px top strip. Editor fills the remaining 1fr grid row.
  *
  * Drag protection: when the user is dragging the divider, we add a
  * `mobile-lab-dragging` class on the root — CSS uses this to set
@@ -49,8 +48,12 @@ import { cn } from '@/lib/utils';
  * doesn't swallow pointermove events.
  *
  * Visual Viewport: useViewportUnits() publishes --vvh / --vvw to <html>.
- * When the on-screen keyboard opens, --vvh shrinks, the editor shrinks,
- * the runbar stays anchored.
+ * When the on-screen keyboard opens, --vvh shrinks, the editor shrinks.
+ * The action bar is at the TOP now (no longer affected by keyboard).
+ *
+ * The global Shell SearchBar is hidden on /lab/* routes by Shell.tsx,
+ * so the visual space previously occupied by the search bar is reclaimed
+ * for the editor + preview.
  */
 
 interface MobileLabRootProps {
@@ -69,8 +72,10 @@ const DEFAULT_SETTINGS = {
   minimap: false,
 };
 
-// Runbar height used to offset the grid (used as a constant for
-// the bottom padding on the lab root).
+// The action bar moved from bottom (60 px reserved) to top (inside
+// the new ~84 px header strip). This constant is retained for
+// back-compat with other lab modules but is no longer used by the
+// grid layout.
 const RUNBAR_RESERVED_PX = 60;
 
 export function MobileLabRoot({ initial, onProjectChange, readOnly }: MobileLabRootProps) {
@@ -233,10 +238,11 @@ export function MobileLabRoot({ initial, onProjectChange, readOnly }: MobileLabR
   const handleRetryPython = () => { resetPyodide(); loadPyodideSingleton().catch(() => {}); };
   const handleClearErrors = () => setErrors([]);
 
-  /* CSS variables — viewer top region. editor fills remaining grid row 1fr. */
+  /* CSS variables — viewer top region. editor fills remaining grid row 1fr.
+   * The 84 px top strip (row 1 language + filename, row 2 action bar) is
+   * subtracted so the new top strip doesn't get clipped by the viewer. */
   const style = {
-    '--vr-h': `calc(var(--vvh, 100dvh) * ${ratio} - 36px)`,
-    '--runbar-h': `${RUNBAR_RESERVED_PX}px`,
+    '--vr-h': `calc(var(--vvh, 100dvh) * ${ratio} - 84px)`,
   } as React.CSSProperties;
 
   return (
@@ -251,13 +257,33 @@ export function MobileLabRoot({ initial, onProjectChange, readOnly }: MobileLabR
       style={style}
       dir="rtl"
     >
-      {/* HEADER (compact 36 px strip) */}
+      {/* HEADER (compact 2-row strip ~84 px) */}
       <header className="mobile-lab-header" dir="rtl">
-        <MobileLanguageDropdown current={activeLang} onChange={onLanguageChange} />
-        <span className="mobile-lab-filename" title={active?.name}>{active?.name}</span>
+        {/* Row 1 — language picker + active filename */}
+        <div className="mobile-lab-header-row1">
+          <MobileLanguageDropdown current={activeLang} onChange={onLanguageChange} />
+          <span className="mobile-lab-filename" title={active?.name}>{active?.name}</span>
+        </div>
+        {/* Row 2 — Run · Reset · Files · Settings (moved up from the bottom) */}
+        {!readOnly && (
+          <MobileRunBar
+            placement="top"
+            isRunning={isRunning}
+            onRun={onRun}
+            onStop={onStop}
+            onReset={onReset}
+            onOpenFiles={() => setFilesSheetOpen(true)}
+            onOpenSettings={() => setSettingsSheetOpen(true)}
+            pythonLoading={pythonLoading}
+            pythonPercent={pythonPercent}
+            pythonError={pythonError}
+            onRetryPython={handleRetryPython}
+            runDisabled={runDisabled}
+          />
+        )}
       </header>
 
-      {/* DYNAMIC VIEWER (top) */}
+      {/* DYNAMIC VIEWER (top, just below header) */}
       <section
         className="mobile-lab-viewer"
         role="region"
@@ -304,23 +330,6 @@ export function MobileLabRoot({ initial, onProjectChange, readOnly }: MobileLabR
           </div>
         )}
       </section>
-
-      {/* ACTION BAR — position: absolute via CSS, always visible */}
-      {!readOnly && (
-        <MobileRunBar
-          isRunning={isRunning}
-          onRun={onRun}
-          onStop={onStop}
-          onReset={onReset}
-          onOpenFiles={() => setFilesSheetOpen(true)}
-          onOpenSettings={() => setSettingsSheetOpen(true)}
-          pythonLoading={pythonLoading}
-          pythonPercent={pythonPercent}
-          pythonError={pythonError}
-          onRetryPython={handleRetryPython}
-          runDisabled={runDisabled}
-        />
-      )}
 
       {/* Sheets */}
       <MobileBottomSheet

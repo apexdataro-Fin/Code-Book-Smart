@@ -239,12 +239,19 @@ export function Sidebar({ open, setOpen }: { open: boolean; setOpen: (v: boolean
 }
 
 export function Shell({ children, readingFrame = false }: { children: React.ReactNode; readingFrame?: boolean }) {
+  const [location] = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(() => {
     if (typeof window === 'undefined') return false;
     const saved = localStorage.getItem('sc_sidebar_open');
     if (saved !== null) return saved === 'true';
     return window.innerWidth >= 1024;
   });
+
+  // Simulator view (/lab/*) gets a route-aware UX: the global search
+  // bar is hidden because the lab itself owns the top toolbar on
+  // mobile. The SearchBar component (and `lib/search`) still work on
+  // every other route — we only suppress the visual instance here.
+  const isLabRoute = typeof location === 'string' && location.startsWith('/lab');
 
   const [isDark, setIsDark] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -323,7 +330,7 @@ export function Shell({ children, readingFrame = false }: { children: React.Reac
             >
               <Menu className="w-5 h-5" />
             </Button>
-            <SearchBar />
+            {!isLabRoute && <SearchBar />}
           </div>
 
           <div className="flex items-center gap-2">

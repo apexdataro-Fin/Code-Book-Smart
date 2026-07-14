@@ -2,15 +2,22 @@ import { Play, Square, RotateCcw, FolderOpen, Settings, Loader2, AlertCircle, Re
 import { cn } from '@/lib/utils';
 
 /**
- * MobileRunBar — sticky bottom toolbar with 5 actions: Run · Stop ·
- * Reset · Files · Settings. ALWAYS VISIBLE because the entire mobile
- * experience is "vertical scrolling; never use landscape mouse hover".
+ * MobileRunBar — toolbar with 5 actions: Run · Stop · Reset · Files · Settings.
+ *
+ * Placement:
+ *   - 'bottom' (default): the original sticky-bottom strip — kept for
+ *     back-compat and the desktop-augmented mobile shell. Uses
+ *     `position: absolute; bottom: 0` plus safe-area-inset-bottom.
+ *   - 'top': sits inside the mobile IDE's 2-row top header strip. CSS
+ *     uses `mobile-runbar-top` to opt out of absolute positioning and
+ *     safe-area-inset-bottom (the strip now lives at the top of the
+ *     viewport, where safe-area is moot).
  *
  *   - Run button shows the spinner + Python progress text when Python
  *     is still loading.
  *   - On Python error we surface a small inline Retry alongside Run.
- *   - 56–60 px tall hit targets.
- *   - safe-area-inset-bottom padding for iPhones.
+ *   - 56–60 px tall hit targets on bottom; ~44 px on top to fit the
+ *     2-row header.
  */
 
 interface MobileRunBarProps {
@@ -30,6 +37,8 @@ interface MobileRunBarProps {
   onRetryPython?: () => void;
   /** Disable Run until env ready. */
   runDisabled?: boolean;
+  /** 'top' = inside the new mobile IDE header strip; 'bottom' = absolute. */
+  placement?: 'top' | 'bottom';
 }
 
 export function MobileRunBar({
@@ -37,6 +46,7 @@ export function MobileRunBar({
   onOpenFiles, onOpenSettings,
   pythonLoading, pythonPercent, pythonError, onRetryPython,
   runDisabled,
+  placement = 'bottom',
 }: MobileRunBarProps) {
   const renderRun = () => {
     if (isRunning) {
@@ -77,7 +87,12 @@ export function MobileRunBar({
   };
 
   return (
-    <div className="mobile-runbar" role="toolbar" dir="ltr">
+    <div
+      className={cn('mobile-runbar', placement === 'top' && 'mobile-runbar-top')}
+      data-placement={placement}
+      role="toolbar"
+      dir="ltr"
+    >
       {renderRun()}
       <button onClick={onReset} className="mobile-action-btn" aria-label="إعادة تعيين">
         <RotateCcw className="w-5 h-5" />
